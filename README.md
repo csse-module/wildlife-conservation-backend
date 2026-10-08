@@ -30,23 +30,33 @@ Services are grouped by feature, with one interface and implementation per featu
 
 Requirements: JDK 17+, MongoDB 5.0+, and the Maven wrapper. MongoDB can be local or a hosted instance. The app creates its collection indexes when it starts, including the unique assignment/patrol indexes.
 
+The app automatically loads an optional `.env` file from its working directory. Keep `MONGODB_URI` and a stable `JWT_SECRET` there for local development; `.env` is ignored by Git. Include `/wildlife_conservation` in the connection URI to select the application database. Environment variables override the values in this file. Run from the backend directory so that the file is found.
+
 PowerShell, from this directory:
 
 ```powershell
 # JAVA_HOME points to the JDK directory, not its bin directory.
 $env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'
+./mvnw.cmd spring-boot:run
+```
+
+To use a local MongoDB instead of the connection in `.env`, set these overrides before running:
+
+```powershell
 $env:MONGODB_URI = 'mongodb://localhost:27017/wildlife_conservation'
 $jwtKeyBytes = New-Object byte[] 32
 $jwtRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $jwtRandom.GetBytes($jwtKeyBytes)
 $jwtRandom.Dispose()
 $env:JWT_SECRET = [Convert]::ToBase64String($jwtKeyBytes)
+```
 
-# Optional demo records: only enabled when both switches are set.
+Optional demo records are enabled separately:
+
+```powershell
 $env:SPRING_PROFILES_ACTIVE = 'dev'
 $env:DEV_SEED_ENABLED = 'true'
 $env:DEV_SEED_PASSWORD = 'choose-your-local-demo-password'
-./mvnw.cmd spring-boot:run
 ```
 
 Set a stable, randomly generated `JWT_SECRET` in the deployed environment; regenerating it invalidates existing tokens. The key must be Base64 encoding of at least 32 bytes. Tokens last 3,600 seconds by default (`JWT_TTL_SECONDS`, allowed 60–86,400). On authenticated requests the backend reads the active account and its current role/parks from MongoDB.

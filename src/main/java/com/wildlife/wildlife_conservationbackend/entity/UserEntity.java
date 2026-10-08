@@ -3,6 +3,7 @@ package com.wildlife.wildlife_conservationbackend.entity;
 import com.wildlife.wildlife_conservationbackend.enums.Role;
 import java.util.Set;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
@@ -14,6 +15,7 @@ import org.springframework.data.mongodb.core.mapping.MongoId;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @ToString(onlyExplicitlyIncluded = true)
 public class UserEntity {
     @MongoId
@@ -27,4 +29,11 @@ public class UserEntity {
     private Role role;
     private Set<String> parkIds;
     private boolean active;
+    private boolean passwordChangeRequired;
+    private long tokenVersion;
+
+    public UserEntity(String id, String name, String normalizedEmail, String passwordHash,
+                      Role role, Set<String> parkIds, boolean active) {
+        this(id, name, normalizedEmail, passwordHash, role, parkIds, active, false, 0);
+    }
 }

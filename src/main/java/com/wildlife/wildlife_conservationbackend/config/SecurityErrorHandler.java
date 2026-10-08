@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -40,6 +42,13 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
                        AccessDeniedException exception) throws IOException {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> AccountAuthorities.PASSWORD_CHANGE_REQUIRED.equals(authority.getAuthority()))) {
+            log.warn("Password change required path={}", request.getRequestURI());
+            write(response, HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_REQUIRED", "Change your temporary password before using this API.");
+            return;
+        }
         log.warn("Access denied path={}", request.getRequestURI());
         write(response, HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Your role cannot perform this operation.");
     }

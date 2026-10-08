@@ -24,7 +24,7 @@ public class JwtTokenProvider {
         Instant now = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer(properties.issuer()).subject(user.getId())
                 .issuedAt(now).notBefore(now).expiresAt(now.plusSeconds(expiresIn()))
-                .id(UUID.randomUUID().toString()).build();
+                .id(UUID.randomUUID().toString()).claim("tokenVersion", user.getTokenVersion()).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();
     }

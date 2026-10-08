@@ -15,4 +15,5 @@ public class UserProfileResponseDTO {
     private String email;
     private Role role;
     private Set<String> parkIds;
+    private boolean passwordChangeRequired;
 }

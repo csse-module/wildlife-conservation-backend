@@ -33,8 +33,20 @@ public class CurrentUserJwtConverter implements Converter<Jwt, AbstractAuthentic
         } catch (DataAccessException exception) {
             throw new OAuth2AuthenticationException(new OAuth2Error("temporarily_unavailable"), exception);
         }
+        requireCurrentToken(jwt, user);
         var principal = new CurrentUser(user.getId(), user.getRole(), Set.copyOf(user.getParkIds()));
+        String passwordAuthority = user.isPasswordChangeRequired()
+                ? AccountAuthorities.PASSWORD_CHANGE_REQUIRED : AccountAuthorities.PASSWORD_READY;
         return new UsernamePasswordAuthenticationToken(principal, null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()), new SimpleGrantedAuthority(passwordAuthority)));
+    }
+
+    private void requireCurrentToken(Jwt jwt, UserEntity user) {
+        Object version = jwt.getClaim("tokenVersion");
+        boolean matches = version == null ? user.getTokenVersion() == 0
+                : version instanceof Number number && number.longValue() == user.getTokenVersion();
+        if (!matches) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"));
+        }
     }
 }

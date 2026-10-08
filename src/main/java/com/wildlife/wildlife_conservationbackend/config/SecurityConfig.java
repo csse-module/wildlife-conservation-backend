@@ -33,8 +33,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.LOGIN).permitAll()
+                        .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.REGISTER).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(EndPoint.BASE + "/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.CHANGE_PASSWORD).authenticated()
+                        .requestMatchers(HttpMethod.GET, EndPoint.BASE + EndPoint.PROFILE).authenticated()
+                        .requestMatchers(EndPoint.BASE + "/**").hasAuthority(AccountAuthorities.PASSWORD_READY)
                         .anyRequest().denyAll())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(errorHandler).accessDeniedHandler(errorHandler))
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter))

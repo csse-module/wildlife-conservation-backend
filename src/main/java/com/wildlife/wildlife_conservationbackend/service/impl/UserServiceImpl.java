@@ -1,6 +1,7 @@
 package com.wildlife.wildlife_conservationbackend.service.impl;
 
 import com.wildlife.wildlife_conservationbackend.domain.CurrentUser;
+import com.wildlife.wildlife_conservationbackend.domain.StaffCreateRequest;
 import com.wildlife.wildlife_conservationbackend.dto.request.PageQuery;
 import com.wildlife.wildlife_conservationbackend.dto.response.PageResponse;
 import com.wildlife.wildlife_conservationbackend.dto.response.StandardResponse;
@@ -34,6 +35,18 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final ParkService parkService;
     private final ResponseGenerator responseGenerator;
+    private final AccountCreator accountCreator;
+
+    @Override
+    public ResponseEntity<StandardResponse<UserProfileResponseDTO>> createStaff(CurrentUser actor, StaffCreateRequest request) {
+        for (String parkId : request.getParkIds()) {
+            parkService.requireExistingPark(actor, parkId);
+        }
+        UserEntity user = accountCreator.create(request.getName(), request.getEmail(), request.getTemporaryPassword(),
+                request.getRole(), request.getParkIds(), true);
+        log.info("Staff account created actorId={} userId={} role={}", actor.getId(), user.getId(), user.getRole());
+        return responseGenerator.generateSuccessResponse(userMapper.toProfile(user), HttpStatus.CREATED);
+    }
 
     @Override
     public ResponseEntity<StandardResponse<UserProfileResponseDTO>> getProfile(CurrentUser actor) {
