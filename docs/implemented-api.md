@@ -1,15 +1,18 @@
 # Implemented APIs
 
-Base URL: `http://localhost:8080/api/v1`. The backend implements 36 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one and returns it in the response header.
+Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one and returns it in the response header.
 
 ## Roles and flows
 
 | Method | Path | Allowed roles |
 | --- | --- | --- |
 | POST | `/auth/login` | Public |
+| POST | `/auth/register` **NEW** | Public; creates COMMUNITY_MEMBER |
+| POST | `/auth/change-password` **NEW** | All five roles |
 | GET | `/auth/me` | All five roles |
 | GET | `/parks` | All five roles |
 | GET | `/users` | PARK_MANAGER |
+| POST | `/users` **NEW** | PARK_MANAGER; creates staff |
 | GET | `/patrol-routes` | PARK_MANAGER, RANGER |
 | GET | `/patrol-routes/{id}` | PARK_MANAGER, RANGER |
 | PUT | `/patrol-assignments/{id}` | PARK_MANAGER |
@@ -51,7 +54,7 @@ Ranger flow: login → load assigned patrols → open route → record track, wa
 
 ## Common response
 
-JSON APIs use the shared `utility.ResponseGenerator` component. Controllers validate/map inputs and delegate directly to the feature service; the service performs the operation and calls `generateSuccessResponse`. Exception advice and security handlers call `generateErrorResponse` for business, validation, and security failures, including download failures. First creation returns 201 with `Location`; an identical retry returns 200 without that header. Successful image/PDF downloads return binary content with private, no-store caching.
+JSON APIs use the shared `utility.ResponseGenerator` component. Controllers validate/map inputs and delegate directly to the feature service; the service performs the operation and calls `generateSuccessResponse`. Exception advice and security handlers call `generateErrorResponse` for business, validation, and security failures, including download failures. Immutable-resource PUT creation returns 201 with `Location`; an identical PUT retry returns 200 without that header. Account-creation POSTs return 201 without `Location`; a duplicate email returns 409. Successful image/PDF downloads return binary content with private, no-store caching.
 
 Success (HTTP 200, or 201 on creation):
 
@@ -96,14 +99,101 @@ Response `data`:
   "accessToken": "<signed-jwt>", "tokenType": "Bearer", "expiresIn": 3600,
   "user": {
     "id": "usr-ranger", "name": "Demo ranger", "email": "ranger@wildguard.local",
-    "role": "RANGER", "parkIds": ["park-yala"]
+    "role": "RANGER", "parkIds": ["park-yala"], "passwordChangeRequired": false
   }
 }
 ```
 
-Email lookup is case insensitive. Passwords are BCrypt hashes in MongoDB. Login passwords are limited to 72 characters and 72 UTF-8 bytes. Unknown users, incorrect passwords, and inactive accounts return `401 INVALID_CREDENTIALS`. Expired/invalid tokens return `401 UNAUTHORIZED`. There is no registration/refresh-token/logout endpoint in this milestone; Flutter clears its stored token on logout.
+Email lookup is case insensitive. Passwords are BCrypt hashes in MongoDB. Login passwords are limited to 72 characters and 72 UTF-8 bytes. Unknown users, incorrect passwords, and inactive accounts return `401 INVALID_CREDENTIALS`. Expired/invalid tokens return `401 UNAUTHORIZED`. Registration and password change are implemented. There is no refresh-token/logout endpoint; Flutter clears its stored token on logout. Changing a password invalidates all previously issued tokens.
 
 `GET /auth/me` returns the same profile object as `login.data.user`. It never returns the password hash.
+
+## Newly added account APIs — version 1.2.0
+
+Added on 8 October 2026: public community registration, manager-created staff, and password change. The backend now has **39 operations**. These APIs use the same DTO → mapper → domain request → feature service → repository → response-generator structure.
+
+### Community registration — NEW
+
+`POST /auth/register` is public. Request:
+
+```json
+{"name":"Nimal Perera","email":"nimal@example.com","password":"my-community-password","parkId":"park-yala"}
+```
+
+HTTP **201**, response `data`:
+
+```json
+{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"Nimal Perera","email":"nimal@example.com","role":"COMMUNITY_MEMBER","parkIds":["park-yala"],"passwordChangeRequired":false}
+```
+
+The server fixes the role to `COMMUNITY_MEMBER`, assigns only the validated registration park, creates an active account, and returns its profile without credentials or a token. Call `POST /auth/login` afterward. Names are trimmed and emails are lowercased before the unique-email check.
+
+The selected park must exist and appear in `COMMUNITY_REGISTRATION_PARK_IDS`, a comma-separated backend configuration list. Its default is `park-yala`. An empty list disables public registration. Configure the same eligible park IDs in the Flutter sign-up screen; the existing `GET /parks` endpoint remains authenticated.
+
+### Create staff — NEW
+
+`POST /users` requires a park-manager token whose temporary password has already been changed. Request:
+
+```json
+{"name":"New Ranger","email":"new.ranger@example.com","temporaryPassword":"temporary-staff-password","role":"RANGER","parkIds":["park-yala"]}
+```
+
+HTTP **201**, response `data`:
+
+```json
+{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","name":"New Ranger","email":"new.ranger@example.com","role":"RANGER","parkIds":["park-yala"],"passwordChangeRequired":true}
+```
+
+Allowed staff roles: `RANGER`, `LIAISON_OFFICER`, `RESEARCHER`. Supply 1–20 existing parks, all within the manager's own scope. Manager/community role creation through this endpoint is rejected. Initial passwords are BCrypt hashes in MongoDB and are never returned; give the initial password to the staff member separately.
+
+The first manager still comes from trusted initial setup; the existing development seed supplies the demo manager. There is no public park-manager registration.
+
+### Change own password — NEW
+
+`POST /auth/change-password` requires a valid JWT and accepts every role, including temporary-password accounts. Request:
+
+```json
+{"currentPassword":"temporary-staff-password","newPassword":"my-new-private-password"}
+```
+
+HTTP **200**, response `data`:
+
+```json
+{"passwordChangeRequired":false,"reloginRequired":true}
+```
+
+The authenticated subject determines the account. The current password must match and the new password must differ. A conditional MongoDB write updates the hash, clears `passwordChangeRequired`, and increments the internal token version. Concurrent changes cannot overwrite each other.
+
+All previous JWTs, including the token used for this request, become invalid after success. Clear the stored token and log in again with the new password. No replacement token is returned.
+
+### Onboarding rules and errors
+
+Names are required, up to 100 characters; emails are required, up to 254 characters. New community passwords, temporary staff passwords, and replacement passwords require **15–72 Unicode code points and at most 72 UTF-8 bytes**. Current passwords may retain the earlier password length; passwords are preserved exactly without trimming. Validation annotations stay on DTOs, including the UTF-8 byte constraint. Request/domain `toString()` excludes credentials.
+
+Unknown fields are rejected. Public registration cannot accept `role`, `active`, `id`, `parkIds` or `tokenVersion`. Password change cannot accept another user's ID.
+
+| HTTP | Error code | Trigger |
+| --- | --- | --- |
+| 400 | `VALIDATION_FAILED` | Invalid DTO fields, nonexistent configured community park, or reusing the current password |
+| 400 | `INVALID_REQUEST` | Unknown/server-owned fields or malformed JSON |
+| 401 | `UNAUTHORIZED` | Missing, expired, inactive-account or revoked-token authentication |
+| 401 | `INVALID_CREDENTIALS` | Incorrect current password |
+| 403 | `REGISTRATION_NOT_ALLOWED` | Community registration is disabled for the requested park |
+| 403 | `ACCESS_DENIED` | A non-manager attempts staff creation |
+| 403 | `PARK_ACCESS_DENIED` | A manager assigns a park outside their own scope |
+| 403 | `PASSWORD_CHANGE_REQUIRED` | A temporary-password account calls an operational API |
+| 404 | `NOT_FOUND` | Staff assignment references a nonexistent park within the manager's assigned scope |
+| 409 | `EMAIL_ALREADY_EXISTS` | Email already exists, including concurrent creation |
+| 409 | `PASSWORD_CHANGE_CONFLICT` | Another password/account change wins the conditional update |
+| 503 | `STORAGE_UNAVAILABLE` | Database operation fails |
+
+`passwordChangeRequired` is included in registration/staff profiles, `login.data.user`, and `GET /auth/me`. While true, protected access is limited to `GET /auth/me` and `POST /auth/change-password`. Existing account documents without the new fields default to false/version zero; existing tokens remain usable until password rotation.
+
+Flutter community flow: register → login → save JWT → community reporting.
+
+Flutter staff flow: manager creates account → staff login → inspect `data.user.passwordChangeRequired` → password-change screen → discard JWT → login again → role dashboard.
+
+The Postman collection's **NEW — account onboarding (1.2.0)** folder covers both flows. Set its separate password variables and run the existing manager login before staff creation. Use a fresh email for each creation attempt. Email verification, invitations, and password recovery remain separate integrations.
 
 ## Lookups and pagination
 

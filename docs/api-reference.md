@@ -1,33 +1,18 @@
 # WildGuard API specification
 
-Original proposed contract: **36 operations**. The first 11 operations are now implemented with the reference-style response envelope. Use [implemented-api.md](implemented-api.md) and [implemented-openapi.json](implemented-openapi.json) for their current contracts; the examples below remain planning material for the wider system. Base URL: `http://localhost:8080/api/v1`.
+Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one and returns it in the response header.
 
-Requests/responses below agree with `openapi.json`. OpenAPI contains full schemas, limits and complete examples. Longer arrays in this readable guide show representative rows; do not use a shortened analytics example as a complete dataset. Coordinates and observations are illustrative, not verified wildlife locations. Examples illustrate separate calls and are not a preloaded live dataset. For a camera/community/response photo, upload a different UUID with the matching category and owner; do not reuse the incident photo example across account roles.
+## Roles and flows
 
-## Shared conventions
-
-Authenticated request headers:
-
-```http
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-Accept: application/json
-```
-
-For media upload use `multipart/form-data` with the boundary supplied by the HTTP client. For image/PDF downloads, request the appropriate binary content type. Seed/reference IDs are strings; IDs for created records are client UUIDs.
-
-A first immutable-record PUT returns **201**; identical retries return **200** and the original record. Changed reuse is **409**. Records are finalized at submission; drafts and active patrols remain local. Identity/status fields are server-owned. Errors follow the `ApiError` schema.
-
-Pagination is zero-based, default 20, maximum 100. Date pairs are inclusive park-local dates, at most 92 days. Optional fields should be omitted rather than set to null, except `coveragePercent`, which is null when there are no assigned routes.
-
-## Endpoint inventory
-
-| Method | Path | Access |
+| Method | Path | Allowed roles |
 | --- | --- | --- |
-| POST | `/auth/login` | Public login |
-| GET | `/auth/me` | PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER |
-| GET | `/parks` | PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER |
+| POST | `/auth/login` | Public |
+| POST | `/auth/register` **NEW** | Public; creates COMMUNITY_MEMBER |
+| POST | `/auth/change-password` **NEW** | All five roles |
+| GET | `/auth/me` | All five roles |
+| GET | `/parks` | All five roles |
 | GET | `/users` | PARK_MANAGER |
+| POST | `/users` **NEW** | PARK_MANAGER; creates staff |
 | GET | `/patrol-routes` | PARK_MANAGER, RANGER |
 | GET | `/patrol-routes/{id}` | PARK_MANAGER, RANGER |
 | PUT | `/patrol-assignments/{id}` | PARK_MANAGER |
@@ -35,8 +20,8 @@ Pagination is zero-based, default 20, maximum 100. Date pairs are inclusive park
 | PUT | `/patrols/{id}` | RANGER |
 | GET | `/patrols` | PARK_MANAGER, RANGER |
 | GET | `/patrols/{id}` | PARK_MANAGER, RANGER |
-| PUT | `/media/{id}` | PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER |
-| GET | `/media/{id}/content` | PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER |
+| PUT | `/media/{id}` | All five roles |
+| GET | `/media/{id}/content` | All five roles |
 | PUT | `/incidents/{id}` | RANGER |
 | GET | `/incidents` | PARK_MANAGER, RANGER |
 | GET | `/incidents/{id}` | PARK_MANAGER, RANGER |
@@ -61,1901 +46,291 @@ Pagination is zero-based, default 20, maximum 100. Date pairs are inclusive park
 | GET | `/camera-trap-images/{id}` | PARK_MANAGER, RESEARCHER |
 | PUT | `/camera-trap-images/{id}/review` | PARK_MANAGER, RESEARCHER |
 
-## Authentication
+The five roles are `PARK_MANAGER`, `RANGER`, `LIAISON_OFFICER`, `RESEARCHER`, `COMMUNITY_MEMBER`. Every resource is restricted to the account's assigned parks. Ranger assignment/patrol queries return only that ranger's records. Managers see records within their assigned parks. `/users` returns active users sharing the selected/assigned parks; its default role filter is `RANGER`.
 
-### POST `/auth/login`
+Manager flow: login → load profile/parks → load routes and eligible rangers → create assignment with a new UUID → view assignments/patrol summaries → open patrol details.
 
-Sign in.
+Ranger flow: login → load assigned patrols → open route → record track, waypoints, and observations locally → PUT the completed snapshot with a new UUID → refresh assignments → view the completed patrol. Offline storage and retry scheduling belong to Flutter. The API accepts completed snapshots only.
 
-Access: Public login.
+## Common response
 
-Only this operation is public. Validate active account and BCrypt password; generic 401 for invalid credentials. The token string in this example is a placeholder.
+JSON APIs use the shared `utility.ResponseGenerator` component. Controllers validate/map inputs and delegate directly to the feature service; the service performs the operation and calls `generateSuccessResponse`. Exception advice and security handlers call `generateErrorResponse` for business, validation, and security failures, including download failures. Immutable-resource PUT creation returns 201 with `Location`; an identical PUT retry returns 200 without that header. Account-creation POSTs return 201 without `Location`; a duplicate email returns 409. Successful image/PDF downloads return binary content with private, no-store caching.
 
-Request: `application/json`; schema `LoginRequest`.
+Success (HTTP 200, or 201 on creation):
 
 ```json
 {
-  "email": "ranger@example.com",
-  "password": "demo-password"
+  "status": "00",
+  "description": "SUCCESS",
+  "data": {"id": "example"},
+  "error": {"errorCode": "00", "errorDescription": "SUCCESS", "fieldErrors": {}}
 }
 ```
 
-Response: **200**, `application/json`.
+Error (the HTTP status indicates failure):
 
 ```json
 {
-  "accessToken": "<signed-jwt>",
-  "tokenType": "Bearer",
-  "expiresIn": 3600,
+  "status": "01",
+  "description": "FAIL",
+  "data": {},
+  "error": {
+    "errorCode": "VALIDATION_FAILED",
+    "errorDescription": "Check the highlighted fields.",
+    "fieldErrors": {"email": "must not be blank"}
+  }
+}
+```
+
+The following examples show the value of `data`. The complete schemas, envelope, and examples for every endpoint are in `implemented-openapi.json`.
+
+## Login and profile
+
+`POST /auth/login` request:
+
+```json
+{"email":"ranger@wildguard.local","password":"your-local-demo-password"}
+```
+
+Response `data`:
+
+```json
+{
+  "accessToken": "<signed-jwt>", "tokenType": "Bearer", "expiresIn": 3600,
   "user": {
-    "id": "usr-ranger-1",
-    "name": "Nimal Perera",
-    "email": "ranger@example.com",
-    "role": "RANGER",
-    "parkIds": [
-      "park-yala"
-    ]
+    "id": "usr-ranger", "name": "Demo ranger", "email": "ranger@wildguard.local",
+    "role": "RANGER", "parkIds": ["park-yala"], "passwordChangeRequired": false
   }
 }
 ```
 
-Error statuses: 400, 401, 500, 503. See the common error shape below.
+Email lookup is case insensitive. Passwords are BCrypt hashes in MongoDB. Login passwords are limited to 72 characters and 72 UTF-8 bytes. Unknown users, incorrect passwords, and inactive accounts return `401 INVALID_CREDENTIALS`. Expired/invalid tokens return `401 UNAUTHORIZED`. Registration and password change are implemented. There is no refresh-token/logout endpoint; Flutter clears its stored token on logout. Changing a password invalidates all previously issued tokens.
 
-### GET `/auth/me`
+`GET /auth/me` returns the same profile object as `login.data.user`. It never returns the password hash.
 
-Get the signed-in account.
+## Newly added account APIs — version 1.2.0
 
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER.
+Added on 8 October 2026: public community registration, manager-created staff, and password change. The backend now has **39 operations**. These APIs use the same DTO → mapper → domain request → feature service → repository → response-generator structure.
 
-Return the active account from the authenticated subject. Never include password hashes.
+### Community registration — NEW
 
-Request body: none.
-
-Response: **200**, `application/json`.
+`POST /auth/register` is public. Request:
 
 ```json
-{
-  "id": "usr-ranger-1",
-  "name": "Nimal Perera",
-  "email": "ranger@example.com",
-  "role": "RANGER",
-  "parkIds": [
-    "park-yala"
-  ]
-}
+{"name":"Nimal Perera","email":"nimal@example.com","password":"my-community-password","parkId":"park-yala"}
 ```
 
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Reference
-
-### GET `/parks`
-
-List authorized parks.
-
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER.
-
-Return only parks assigned to this account, including their known areas and timezone.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
+HTTP **201**, response `data`:
 
 ```json
-{
-  "items": [
-    {
-      "id": "park-yala",
-      "name": "Yala National Park",
-      "timezone": "Asia/Colombo",
-      "areas": [
-        {
-          "id": "area-b1",
-          "name": "Block 1"
-        },
-        {
-          "id": "area-north",
-          "name": "Northern boundary"
-        }
-      ]
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
+{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"Nimal Perera","email":"nimal@example.com","role":"COMMUNITY_MEMBER","parkIds":["park-yala"],"passwordChangeRequired":false}
 ```
 
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
+The server fixes the role to `COMMUNITY_MEMBER`, assigns only the validated registration park, creates an active account, and returns its profile without credentials or a token. Call `POST /auth/login` afterward. Names are trimmed and emails are lowercased before the unique-email check.
 
-### GET `/users`
+The selected park must exist and appear in `COMMUNITY_REGISTRATION_PARK_IDS`, a comma-separated backend configuration list. Its default is `park-yala`. An empty list disables public registration. Configure the same eligible park IDs in the Flutter sign-up screen; the existing `GET /parks` endpoint remains authenticated.
 
-List eligible rangers.
+### Create staff — NEW
 
-Access: PARK_MANAGER.
-
-Active rangers in the authorized park only; excludes private account details.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `role` | query | Yes | RANGER | `RANGER` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
+`POST /users` requires a park-manager token whose temporary password has already been changed. Request:
 
 ```json
-{
-  "items": [
-    {
-      "id": "usr-ranger-1",
-      "name": "Nimal Perera",
-      "role": "RANGER"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
+{"name":"New Ranger","email":"new.ranger@example.com","temporaryPassword":"temporary-staff-password","role":"RANGER","parkIds":["park-yala"]}
 ```
 
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/patrol-routes`
-
-List authorized patrol routes.
-
-Access: PARK_MANAGER, RANGER.
-
-Seed routes for the first milestone; routes are not edited through this contract.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
+HTTP **201**, response `data`:
 
 ```json
-{
-  "items": [
-    {
-      "id": "route-yala-b1",
-      "parkId": "park-yala",
-      "areaId": "area-b1",
-      "name": "Block 1 wildlife trail",
-      "plannedDistanceMeters": 8500,
-      "pathPoints": [
-        {
-          "latitude": 6.35,
-          "longitude": 81.5
-        },
-        {
-          "latitude": 6.351,
-          "longitude": 81.501
-        }
-      ]
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
+{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","name":"New Ranger","email":"new.ranger@example.com","role":"RANGER","parkIds":["park-yala"],"passwordChangeRequired":true}
 ```
 
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
+Allowed staff roles: `RANGER`, `LIAISON_OFFICER`, `RESEARCHER`. Supply 1–20 existing parks, all within the manager's own scope. Manager/community role creation through this endpoint is rejected. Initial passwords are BCrypt hashes in MongoDB and are never returned; give the initial password to the staff member separately.
 
-### GET `/patrol-routes/{id}`
+The first manager still comes from trusted initial setup; the existing development seed supplies the demo manager. There is no public park-manager registration.
 
-Get a patrol route.
+### Change own password — NEW
 
-Access: PARK_MANAGER, RANGER.
-
-Park-scoped route geometry and metadata.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | string | `route-yala-b1` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
+`POST /auth/change-password` requires a valid JWT and accepts every role, including temporary-password accounts. Request:
 
 ```json
-{
-  "id": "route-yala-b1",
-  "parkId": "park-yala",
-  "areaId": "area-b1",
-  "name": "Block 1 wildlife trail",
-  "plannedDistanceMeters": 8500,
-  "pathPoints": [
-    {
-      "latitude": 6.35,
-      "longitude": 81.5
-    },
-    {
-      "latitude": 6.351,
-      "longitude": 81.501
-    }
-  ]
-}
+{"currentPassword":"temporary-staff-password","newPassword":"my-new-private-password"}
 ```
 
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Patrols
-
-### PUT `/patrol-assignments/{id}`
-
-Assign a patrol route.
-
-Access: PARK_MANAGER.
-
-Route determines park/area. Ranger must be active and assigned to that park; end must be after start. Reject a second assignment for the same ranger/start instant. Identical UUID/payload replay returns 200; changed replay returns 409. No general overlap scheduler.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `11111111-1111-4111-8111-111111111111` |
-
-Request: `application/json`; schema `AssignmentRequest`.
+HTTP **200**, response `data`:
 
 ```json
-{
-  "routeId": "route-yala-b1",
-  "rangerId": "usr-ranger-1",
-  "scheduledStartAt": "2026-10-08T02:30:00Z",
-  "scheduledEndAt": "2026-10-08T06:30:00Z"
-}
+{"passwordChangeRequired":false,"reloginRequired":true}
 ```
 
-Response: **201**, `application/json`.
+The authenticated subject determines the account. The current password must match and the new password must differ. A conditional MongoDB write updates the hash, clears `passwordChangeRequired`, and increments the internal token version. Concurrent changes cannot overwrite each other.
 
-```json
-{
-  "id": "11111111-1111-4111-8111-111111111111",
-  "routeId": "route-yala-b1",
-  "rangerId": "usr-ranger-1",
-  "scheduledStartAt": "2026-10-08T02:30:00Z",
-  "scheduledEndAt": "2026-10-08T06:30:00Z",
-  "parkId": "park-yala",
-  "status": "ASSIGNED",
-  "assignedBy": "usr-manager-1",
-  "createdAt": "2026-10-07T10:00:00Z"
-}
-```
+All previous JWTs, including the token used for this request, become invalid after success. Clear the stored token and log in again with the new password. No replacement token is returned.
 
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
+### Onboarding rules and errors
 
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
+Names are required, up to 100 characters; emails are required, up to 254 characters. New community passwords, temporary staff passwords, and replacement passwords require **15–72 Unicode code points and at most 72 UTF-8 bytes**. Current passwords may retain the earlier password length; passwords are preserved exactly without trimming. Validation annotations stay on DTOs, including the UTF-8 byte constraint. Request/domain `toString()` excludes credentials.
 
-### GET `/patrol-assignments`
+Unknown fields are rejected. Public registration cannot accept `role`, `active`, `id`, `parkIds` or `tokenVersion`. Password change cannot accept another user's ID.
 
-List patrol assignments.
-
-Access: PARK_MANAGER, RANGER.
-
-Ranger sees own assignments. Manager sees authorized-park assignments. Status is derived from submitted completed patrols.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | No | string | `park-yala` |
-| `status` | query | No | ASSIGNED / COMPLETED | `ASSIGNED` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "11111111-1111-4111-8111-111111111111",
-      "routeId": "route-yala-b1",
-      "rangerId": "usr-ranger-1",
-      "scheduledStartAt": "2026-10-08T02:30:00Z",
-      "scheduledEndAt": "2026-10-08T06:30:00Z",
-      "parkId": "park-yala",
-      "status": "ASSIGNED",
-      "assignedBy": "usr-manager-1",
-      "createdAt": "2026-10-07T10:00:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### PUT `/patrols/{id}`
-
-Submit a completed patrol.
-
-Access: RANGER.
-
-Immutable completed snapshot; active recording remains local. Validate assignment ownership, one patrol per assignment, ordered timestamps and location/array limits. Compute distance from continuous GPS segments, ignoring gaps over 120 seconds and fixes with reported accuracy worse than 100 meters; manual waypoints do not add travel distance. Identical replay is safe; changed replay or reused assignment is 409.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `22222222-2222-4222-8222-222222222222` |
-
-Request: `application/json`; schema `PatrolRequest`.
-
-```json
-{
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "startedAt": "2026-10-08T02:45:00Z",
-  "endedAt": "2026-10-08T06:40:00Z",
-  "trackPoints": [
-    {
-      "latitude": 6.35,
-      "longitude": 81.5,
-      "recordedAt": "2026-10-08T02:45:00Z",
-      "accuracyMeters": 8
-    },
-    {
-      "latitude": 6.3501,
-      "longitude": 81.5001,
-      "recordedAt": "2026-10-08T02:45:30Z",
-      "accuracyMeters": 8
-    }
-  ],
-  "waypoints": [
-    {
-      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      "label": "Fresh footprints",
-      "recordedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ],
-  "observations": [
-    {
-      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "text": "Fresh elephant footprints near the trail.",
-      "observedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ]
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "22222222-2222-4222-8222-222222222222",
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "routeId": "route-yala-b1",
-  "parkId": "park-yala",
-  "rangerId": "usr-ranger-1",
-  "status": "COMPLETED",
-  "startedAt": "2026-10-08T02:45:00Z",
-  "endedAt": "2026-10-08T06:40:00Z",
-  "recordedDistanceMeters": 15.7,
-  "waypointCount": 1,
-  "observationCount": 1,
-  "createdAt": "2026-10-08T06:41:00Z",
-  "trackPoints": [
-    {
-      "latitude": 6.35,
-      "longitude": 81.5,
-      "recordedAt": "2026-10-08T02:45:00Z",
-      "accuracyMeters": 8
-    },
-    {
-      "latitude": 6.3501,
-      "longitude": 81.5001,
-      "recordedAt": "2026-10-08T02:45:30Z",
-      "accuracyMeters": 8
-    }
-  ],
-  "waypoints": [
-    {
-      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      "label": "Fresh footprints",
-      "recordedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ],
-  "observations": [
-    {
-      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "text": "Fresh elephant footprints near the trail.",
-      "observedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ]
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/patrols`
-
-List completed patrol summaries.
-
-Access: PARK_MANAGER, RANGER.
-
-Ranger sees own records; manager sees authorized parks. No track arrays in list responses. Date filters use endedAt; supply both dates or neither, range at most 92 days.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | No | string | `park-yala` |
-| `from` | query | No | date | `2026-08-01` |
-| `to` | query | No | date | `2026-08-31` |
-| `routeId` | query | No | string | `route-yala-b1` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "22222222-2222-4222-8222-222222222222",
-      "assignmentId": "11111111-1111-4111-8111-111111111111",
-      "routeId": "route-yala-b1",
-      "parkId": "park-yala",
-      "rangerId": "usr-ranger-1",
-      "status": "COMPLETED",
-      "startedAt": "2026-10-08T02:45:00Z",
-      "endedAt": "2026-10-08T06:40:00Z",
-      "recordedDistanceMeters": 15.7,
-      "waypointCount": 1,
-      "observationCount": 1,
-      "createdAt": "2026-10-08T06:41:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/patrols/{id}`
-
-Get completed patrol and recorded path.
-
-Access: PARK_MANAGER, RANGER.
-
-Owner ranger or authorized park manager. Includes stored waypoints, observations and track points.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `22222222-2222-4222-8222-222222222222` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "22222222-2222-4222-8222-222222222222",
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "routeId": "route-yala-b1",
-  "parkId": "park-yala",
-  "rangerId": "usr-ranger-1",
-  "status": "COMPLETED",
-  "startedAt": "2026-10-08T02:45:00Z",
-  "endedAt": "2026-10-08T06:40:00Z",
-  "recordedDistanceMeters": 15.7,
-  "waypointCount": 1,
-  "observationCount": 1,
-  "createdAt": "2026-10-08T06:41:00Z",
-  "trackPoints": [
-    {
-      "latitude": 6.35,
-      "longitude": 81.5,
-      "recordedAt": "2026-10-08T02:45:00Z",
-      "accuracyMeters": 8
-    },
-    {
-      "latitude": 6.3501,
-      "longitude": 81.5001,
-      "recordedAt": "2026-10-08T02:45:30Z",
-      "accuracyMeters": 8
-    }
-  ],
-  "waypoints": [
-    {
-      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      "label": "Fresh footprints",
-      "recordedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ],
-  "observations": [
-    {
-      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "text": "Fresh elephant footprints near the trail.",
-      "observedAt": "2026-10-08T04:00:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ]
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Media
-
-### PUT `/media/{id}`
-
-Upload an image with a stable client UUID.
-
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER.
-
-Multipart form fields file, parkId and category. Decode/validate JPEG or PNG, max 5 MiB. Category must match role: ranger INCIDENT/ALERT_RESPONSE; liaison ALERT_RESPONSE; community member COMMUNITY_REPORT; researcher/manager CAMERA_TRAP. Same UUID, owner, category, park and bytes returns 200; changed bytes/metadata is 409. Only owner can access unlinked uploads.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `33333333-3333-4333-8333-333333333333` |
-
-Request: `multipart/form-data`; schema `MediaUpload`.
-
-```text
-file: <JPEG/PNG binary, maximum 5 MiB>
-parkId: park-yala
-category: INCIDENT
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "33333333-3333-4333-8333-333333333333",
-  "parkId": "park-yala",
-  "category": "INCIDENT",
-  "contentType": "image/jpeg",
-  "sizeBytes": 245800,
-  "contentUrl": "/api/v1/media/33333333-3333-4333-8333-333333333333/content",
-  "createdAt": "2026-10-08T06:41:00Z"
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 413, 415, 500, 503. See the common error shape below.
-
-### GET `/media/{id}/content`
-
-Download authorized image content.
-
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER, RESEARCHER, COMMUNITY_MEMBER.
-
-Owner or caller authorized to read the linked parent record. Unlinked media are owner-only. Authenticated download; never expose local file paths.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `33333333-3333-4333-8333-333333333333` |
-
-Request body: none.
-
-Response: **200**, `image/jpeg`.
-
-```text
-<JPEG or PNG bytes>
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Incidents
-
-### PUT `/incidents/{id}`
-
-Submit a wildlife incident.
-
-Access: RANGER.
-
-Required evidence photo must already exist, belong to this ranger and park, and have INCIDENT category. Optional assignmentId must belong to this ranger in the same park. That assignment can link the incident to a still-local patrol without delaying incident submission; the final patrol uses the same assignmentId. Server sets reporter and SUBMITTED. Only explicitly submitted records are uploaded; no server drafts.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `44444444-4444-4444-8444-444444444444` |
-
-Request: `application/json`; schema `IncidentRequest`.
-
-```json
-{
-  "parkId": "park-yala",
-  "areaId": "area-b1",
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "type": "SNARE",
-  "detectedAt": "2026-10-08T04:54:00Z",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "description": "Wire snare found beside a wildlife trail. No animal was trapped.",
-  "photoId": "33333333-3333-4333-8333-333333333333"
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "44444444-4444-4444-8444-444444444444",
-  "parkId": "park-yala",
-  "areaId": "area-b1",
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "type": "SNARE",
-  "detectedAt": "2026-10-08T04:54:00Z",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "description": "Wire snare found beside a wildlife trail. No animal was trapped.",
-  "photoId": "33333333-3333-4333-8333-333333333333",
-  "reportedBy": "usr-ranger-1",
-  "status": "SUBMITTED",
-  "createdAt": "2026-10-08T06:41:00Z"
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/incidents`
-
-List submitted incidents.
-
-Access: PARK_MANAGER, RANGER.
-
-Ranger sees own incidents; manager sees authorized parks. Dates filter detectedAt; provide both or neither, max 92 days. Page through the list for map points; do not truncate the map silently.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | No | string | `park-yala` |
-| `from` | query | No | date | `2026-08-01` |
-| `to` | query | No | date | `2026-08-31` |
-| `type` | query | No | SNARE / INJURED_ANIMAL / ANIMAL_CARCASS / ILLEGAL_CAMPSITE / POACHING_EVIDENCE / ANIMAL_FOOTPRINTS / OTHER | `SNARE` |
-| `areaId` | query | No | string | `area-b1` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "44444444-4444-4444-8444-444444444444",
-      "parkId": "park-yala",
-      "areaId": "area-b1",
-      "assignmentId": "11111111-1111-4111-8111-111111111111",
-      "type": "SNARE",
-      "detectedAt": "2026-10-08T04:54:00Z",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      },
-      "description": "Wire snare found beside a wildlife trail. No animal was trapped.",
-      "photoId": "33333333-3333-4333-8333-333333333333",
-      "reportedBy": "usr-ranger-1",
-      "status": "SUBMITTED",
-      "createdAt": "2026-10-08T06:41:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/incidents/{id}`
-
-Get an incident.
-
-Access: PARK_MANAGER, RANGER.
-
-Owner ranger or manager in the incident park.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `44444444-4444-4444-8444-444444444444` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "44444444-4444-4444-8444-444444444444",
-  "parkId": "park-yala",
-  "areaId": "area-b1",
-  "assignmentId": "11111111-1111-4111-8111-111111111111",
-  "type": "SNARE",
-  "detectedAt": "2026-10-08T04:54:00Z",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "description": "Wire snare found beside a wildlife trail. No animal was trapped.",
-  "photoId": "33333333-3333-4333-8333-333333333333",
-  "reportedBy": "usr-ranger-1",
-  "status": "SUBMITTED",
-  "createdAt": "2026-10-08T06:41:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Alerts
-
-### PUT `/alerts/{id}`
-
-Create a demo/setup conflict alert.
-
-Access: PARK_MANAGER.
-
-Manager-only manual setup for the first milestone, not automatic collar detection. LocationUpdatedAt is the observation time, never the GET time. All park/area and time references are validated. Server sets NEW.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request: `application/json`; schema `AlertSetupRequest`.
-
-```json
-{
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "animal": "Asian elephant",
-  "collarId": "ELE-017",
-  "riskLevel": "HIGH",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "locationUpdatedAt": "2026-10-08T13:13:00Z",
-  "detectedAt": "2026-10-08T13:12:00Z"
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "55555555-5555-4555-8555-555555555555",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "animal": "Asian elephant",
-  "collarId": "ELE-017",
-  "riskLevel": "HIGH",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "locationUpdatedAt": "2026-10-08T13:13:00Z",
-  "detectedAt": "2026-10-08T13:12:00Z",
-  "status": "NEW",
-  "createdAt": "2026-10-08T13:12:01Z"
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/alerts`
-
-List eligible conflict alerts.
-
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER.
-
-Park-scoped; officers see New alerts except their own declines, their own Responding alerts and eligible Resolved history. Managers can inspect all in their parks. Poll in foreground; not background delivery.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | No | string | `park-yala` |
-| `status` | query | No | NEW / RESPONDING / RESOLVED | `NEW` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "55555555-5555-4555-8555-555555555555",
-      "parkId": "park-yala",
-      "areaId": "area-north",
-      "animal": "Asian elephant",
-      "collarId": "ELE-017",
-      "riskLevel": "HIGH",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      },
-      "locationUpdatedAt": "2026-10-08T13:13:00Z",
-      "detectedAt": "2026-10-08T13:12:00Z",
-      "status": "NEW",
-      "createdAt": "2026-10-08T13:12:01Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/alerts/{id}`
-
-Get alert and last-known location.
-
-Access: PARK_MANAGER, RANGER, LIAISON_OFFICER.
-
-Authorized park scope; preserve locationUpdatedAt. Do not label a stale observation Live.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "55555555-5555-4555-8555-555555555555",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "animal": "Asian elephant",
-  "collarId": "ELE-017",
-  "riskLevel": "HIGH",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "locationUpdatedAt": "2026-10-08T13:13:00Z",
-  "detectedAt": "2026-10-08T13:12:00Z",
-  "status": "RESPONDING",
-  "createdAt": "2026-10-08T13:12:01Z",
-  "assignedOfficerId": "usr-ranger-1",
-  "acceptedAt": "2026-10-08T13:14:00Z",
-  "supportRequests": []
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### POST `/alerts/{id}/accept`
-
-Accept an unassigned alert.
-
-Access: RANGER, LIAISON_OFFICER.
-
-No body. Atomic conditional NEW-to-RESPONDING transition; authenticated officer must be eligible and not have declined. Same officer retry returns 200. Another owner or invalid state is 409.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "55555555-5555-4555-8555-555555555555",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "animal": "Asian elephant",
-  "collarId": "ELE-017",
-  "riskLevel": "HIGH",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "locationUpdatedAt": "2026-10-08T13:13:00Z",
-  "detectedAt": "2026-10-08T13:12:00Z",
-  "status": "RESPONDING",
-  "createdAt": "2026-10-08T13:12:01Z",
-  "assignedOfficerId": "usr-ranger-1",
-  "acceptedAt": "2026-10-08T13:14:00Z",
-  "supportRequests": []
-}
-```
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### POST `/alerts/{id}/decline`
-
-Record inability to respond.
-
-Access: RANGER, LIAISON_OFFICER.
-
-NEW alerts only, before acceptance. Leave alert NEW and record one decline per officer. Same reason retry returns 200; changed repeated decline or invalid state is 409. Automatic reassignment/escalation is deferred.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request: `application/json`; schema `DeclineRequest`.
-
-```json
-{
-  "reason": "Already responding to another incident."
-}
-```
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "alertId": "55555555-5555-4555-8555-555555555555",
-  "officerId": "usr-ranger-1",
-  "status": "NEW",
-  "reason": "Already responding to another incident.",
-  "recordedAt": "2026-10-08T13:14:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### POST `/alerts/{id}/support`
-
-Record a support request.
-
-Access: RANGER, LIAISON_OFFICER.
-
-Assigned officer on RESPONDING alert only. Embed bounded support requests (max 20). Atomic deduplication by requestId: exact replay 200; changed requestId payload 409. REQUESTED means recorded, not delivered.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request: `application/json`; schema `SupportRequest`.
-
-```json
-{
-  "requestId": "66666666-6666-4666-8666-666666666666",
-  "reason": "Additional officers needed near the village boundary."
-}
-```
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "requestId": "66666666-6666-4666-8666-666666666666",
-  "alertId": "55555555-5555-4555-8555-555555555555",
-  "requestedBy": "usr-ranger-1",
-  "reason": "Additional officers needed near the village boundary.",
-  "status": "REQUESTED",
-  "requestedAt": "2026-10-08T13:20:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### PUT `/alerts/{id}/response`
-
-Save response and resolve alert.
-
-Access: RANGER, LIAISON_OFFICER.
-
-Assigned officer only. Atomically store response and set RESOLVED in one alert document. Any photos must be owned/park-scoped ALERT_RESPONSE media. Exact response retry returns 200; a changed final response or invalid state returns 409. Failed persistence leaves RESPONDING.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `55555555-5555-4555-8555-555555555555` |
-
-Request: `application/json`; schema `AlertResponseRequest`.
-
-```json
-{
-  "actionTaken": "Guided the elephant away from the farmland.",
-  "result": "Animal returned towards the forest.",
-  "notes": "No injuries or property damage reported.",
-  "photoIds": []
-}
-```
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "55555555-5555-4555-8555-555555555555",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "animal": "Asian elephant",
-  "collarId": "ELE-017",
-  "riskLevel": "HIGH",
-  "location": {
-    "latitude": 6.35,
-    "longitude": 81.5,
-    "source": "GPS",
-    "accuracyMeters": 8
-  },
-  "locationUpdatedAt": "2026-10-08T13:13:00Z",
-  "detectedAt": "2026-10-08T13:12:00Z",
-  "status": "RESOLVED",
-  "createdAt": "2026-10-08T13:12:01Z",
-  "assignedOfficerId": "usr-ranger-1",
-  "acceptedAt": "2026-10-08T13:14:00Z",
-  "supportRequests": [],
-  "response": {
-    "actionTaken": "Guided the elephant away from the farmland.",
-    "result": "Animal returned towards the forest.",
-    "notes": "No injuries or property damage reported.",
-    "photoIds": [],
-    "recordedBy": "usr-ranger-1",
-    "recordedAt": "2026-10-08T13:55:00Z"
-  }
-}
-```
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-
-## Analytics
-
-### GET `/analytics/summary`
-
-Get simple conservation analytics.
-
-Access: PARK_MANAGER.
-
-Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `from` | query | Yes | date | `2026-08-01` |
-| `to` | query | Yes | date | `2026-08-31` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "parkId": "park-yala",
-  "from": "2026-08-01",
-  "to": "2026-08-31",
-  "dataAvailable": true,
-  "totalIncidents": 58,
-  "incidentTypeCounts": [
-    {
-      "type": "SNARE",
-      "count": 24
-    },
-    {
-      "type": "ANIMAL_CARCASS",
-      "count": 10
-    }
-  ],
-  "dailyIncidentCounts": [
-    {
-      "date": "2026-08-01",
-      "count": 2
-    },
-    {
-      "date": "2026-08-02",
-      "count": 2
-    }
-  ],
-  "areaCounts": [
-    {
-      "areaId": "area-b1",
-      "areaName": "Block 1",
-      "incidentCount": 20,
-      "potentialHotspot": true
-    },
-    {
-      "areaId": "area-north",
-      "areaName": "Northern boundary",
-      "incidentCount": 38,
-      "potentialHotspot": true
-    }
-  ],
-  "patrolCoverage": {
-    "basis": "ASSIGNED_ROUTES_COMPLETED",
-    "assignedRouteCount": 10,
-    "completedRouteCount": 7,
-    "coveragePercent": 70
-  },
-  "communityReportCount": 18,
-  "resolvedAlertCount": 12,
-  "generatedAt": "2026-10-08T06:41:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Reports
-
-### PUT `/reports/{id}`
-
-Save a generated report snapshot.
-
-Access: PARK_MANAGER.
-
-Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `77777777-7777-4777-8777-777777777777` |
-
-Request: `application/json`; schema `ReportRequest`.
-
-```json
-{
-  "parkId": "park-yala",
-  "reportType": "MONTHLY_CONSERVATION",
-  "from": "2026-08-01",
-  "to": "2026-08-31",
-  "sections": [
-    "INCIDENT_STATISTICS",
-    "PATROL_COVERAGE",
-    "CONFLICT_SUMMARY"
-  ]
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "77777777-7777-4777-8777-777777777777",
-  "parkId": "park-yala",
-  "reportType": "MONTHLY_CONSERVATION",
-  "from": "2026-08-01",
-  "to": "2026-08-31",
-  "sections": [
-    "INCIDENT_STATISTICS",
-    "PATROL_COVERAGE",
-    "CONFLICT_SUMMARY"
-  ],
-  "status": "GENERATED",
-  "generatedBy": "usr-manager-1",
-  "generatedAt": "2026-10-08T06:41:00Z",
-  "downloadUrl": "/api/v1/reports/77777777-7777-4777-8777-777777777777/download",
-  "snapshot": {
-    "parkId": "park-yala",
-    "from": "2026-08-01",
-    "to": "2026-08-31",
-    "dataAvailable": true,
-    "totalIncidents": 58,
-    "incidentTypeCounts": [
-      {
-        "type": "SNARE",
-        "count": 24
-      },
-      {
-        "type": "ANIMAL_CARCASS",
-        "count": 10
-      }
-    ],
-    "dailyIncidentCounts": [
-      {
-        "date": "2026-08-01",
-        "count": 2
-      },
-      {
-        "date": "2026-08-02",
-        "count": 2
-      }
-    ],
-    "areaCounts": [
-      {
-        "areaId": "area-b1",
-        "areaName": "Block 1",
-        "incidentCount": 20,
-        "potentialHotspot": true
-      },
-      {
-        "areaId": "area-north",
-        "areaName": "Northern boundary",
-        "incidentCount": 38,
-        "potentialHotspot": true
-      }
-    ],
-    "patrolCoverage": {
-      "basis": "ASSIGNED_ROUTES_COMPLETED",
-      "assignedRouteCount": 10,
-      "completedRouteCount": 7,
-      "coveragePercent": 70
-    },
-    "communityReportCount": 18,
-    "resolvedAlertCount": 12,
-    "generatedAt": "2026-10-08T06:41:00Z"
-  }
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/reports`
-
-List saved report summaries.
-
-Access: PARK_MANAGER.
-
-Reports in authorized parks; snapshot omitted from list.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "77777777-7777-4777-8777-777777777777",
-      "parkId": "park-yala",
-      "reportType": "MONTHLY_CONSERVATION",
-      "from": "2026-08-01",
-      "to": "2026-08-31",
-      "sections": [
-        "INCIDENT_STATISTICS",
-        "PATROL_COVERAGE",
-        "CONFLICT_SUMMARY"
-      ],
-      "status": "GENERATED",
-      "generatedBy": "usr-manager-1",
-      "generatedAt": "2026-10-08T06:41:00Z",
-      "downloadUrl": "/api/v1/reports/77777777-7777-4777-8777-777777777777/download"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/reports/{id}`
-
-Preview a saved report.
-
-Access: PARK_MANAGER.
-
-Read the stored immutable snapshot, not current analytics.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `77777777-7777-4777-8777-777777777777` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "77777777-7777-4777-8777-777777777777",
-  "parkId": "park-yala",
-  "reportType": "MONTHLY_CONSERVATION",
-  "from": "2026-08-01",
-  "to": "2026-08-31",
-  "sections": [
-    "INCIDENT_STATISTICS",
-    "PATROL_COVERAGE",
-    "CONFLICT_SUMMARY"
-  ],
-  "status": "GENERATED",
-  "generatedBy": "usr-manager-1",
-  "generatedAt": "2026-10-08T06:41:00Z",
-  "downloadUrl": "/api/v1/reports/77777777-7777-4777-8777-777777777777/download",
-  "snapshot": {
-    "parkId": "park-yala",
-    "from": "2026-08-01",
-    "to": "2026-08-31",
-    "dataAvailable": true,
-    "totalIncidents": 58,
-    "incidentTypeCounts": [
-      {
-        "type": "SNARE",
-        "count": 24
-      },
-      {
-        "type": "ANIMAL_CARCASS",
-        "count": 10
-      }
-    ],
-    "dailyIncidentCounts": [
-      {
-        "date": "2026-08-01",
-        "count": 2
-      },
-      {
-        "date": "2026-08-02",
-        "count": 2
-      }
-    ],
-    "areaCounts": [
-      {
-        "areaId": "area-b1",
-        "areaName": "Block 1",
-        "incidentCount": 20,
-        "potentialHotspot": true
-      },
-      {
-        "areaId": "area-north",
-        "areaName": "Northern boundary",
-        "incidentCount": 38,
-        "potentialHotspot": true
-      }
-    ],
-    "patrolCoverage": {
-      "basis": "ASSIGNED_ROUTES_COMPLETED",
-      "assignedRouteCount": 10,
-      "completedRouteCount": 7,
-      "coveragePercent": 70
-    },
-    "communityReportCount": 18,
-    "resolvedAlertCount": 12,
-    "generatedAt": "2026-10-08T06:41:00Z"
-  }
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/reports/{id}/download`
-
-Download report as PDF.
-
-Access: PARK_MANAGER.
-
-Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `77777777-7777-4777-8777-777777777777` |
-
-Request body: none.
-
-Response: **200**, `application/pdf`.
-
-```text
-<PDF bytes>
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Community
-
-### PUT `/community-reports/{id}`
-
-Submit community wildlife report.
-
-Access: COMMUNITY_MEMBER.
-
-Member has authorized park; server sets reporter and SUBMITTED. Require cropDetails for CROP_DAMAGE. Location coordinates may be omitted when only village/landmark is known. Any photo must be owned COMMUNITY_REPORT media in the same park. No SMS ingestion or automatic alert creation in this operation.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `88888888-8888-4888-8888-888888888888` |
-
-Request: `application/json`; schema `CommunityRequest`.
-
-```json
-{
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "type": "CROP_DAMAGE",
-  "species": "Elephant",
-  "village": "Village boundary Area B",
-  "occurredAt": "2026-10-08T13:00:00Z",
-  "description": "Elephants damaged the paddy field near the village.",
-  "cropDetails": "Paddy; damage near the northern edge of the field."
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "88888888-8888-4888-8888-888888888888",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "type": "CROP_DAMAGE",
-  "species": "Elephant",
-  "village": "Village boundary Area B",
-  "occurredAt": "2026-10-08T13:00:00Z",
-  "description": "Elephants damaged the paddy field near the village.",
-  "cropDetails": "Paddy; damage near the northern edge of the field.",
-  "reportedBy": "usr-community-1",
-  "status": "SUBMITTED",
-  "createdAt": "2026-10-08T13:05:00Z"
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/community-reports`
-
-List community reports.
-
-Access: COMMUNITY_MEMBER, PARK_MANAGER, LIAISON_OFFICER.
-
-Member sees own records only; manager/liaison sees their parks. Dates filter occurredAt, both or neither, maximum 92 days.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | No | string | `park-yala` |
-| `from` | query | No | date | `2026-08-01` |
-| `to` | query | No | date | `2026-08-31` |
-| `type` | query | No | WILDLIFE_SIGHTING / CROP_DAMAGE | `CROP_DAMAGE` |
-| `areaId` | query | No | string | `area-north` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "88888888-8888-4888-8888-888888888888",
-      "parkId": "park-yala",
-      "areaId": "area-north",
-      "type": "CROP_DAMAGE",
-      "species": "Elephant",
-      "village": "Village boundary Area B",
-      "occurredAt": "2026-10-08T13:00:00Z",
-      "description": "Elephants damaged the paddy field near the village.",
-      "cropDetails": "Paddy; damage near the northern edge of the field.",
-      "reportedBy": "usr-community-1",
-      "status": "SUBMITTED",
-      "createdAt": "2026-10-08T13:05:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/community-reports/{id}`
-
-Get community report.
-
-Access: COMMUNITY_MEMBER, PARK_MANAGER, LIAISON_OFFICER.
-
-Owner member or authorized park manager/liaison only.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `88888888-8888-4888-8888-888888888888` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "88888888-8888-4888-8888-888888888888",
-  "parkId": "park-yala",
-  "areaId": "area-north",
-  "type": "CROP_DAMAGE",
-  "species": "Elephant",
-  "village": "Village boundary Area B",
-  "occurredAt": "2026-10-08T13:00:00Z",
-  "description": "Elephants damaged the paddy field near the village.",
-  "cropDetails": "Paddy; damage near the northern edge of the field.",
-  "reportedBy": "usr-community-1",
-  "status": "SUBMITTED",
-  "createdAt": "2026-10-08T13:05:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-
-## Cameras
-
-### GET `/camera-traps`
-
-List camera traps.
-
-Access: PARK_MANAGER, RESEARCHER.
-
-Seeded camera-trap metadata in authorized parks.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "CT-003",
-      "parkId": "park-yala",
-      "areaId": "area-b1",
-      "name": "Wildlife trail camera",
-      "location": {
-        "latitude": 6.35,
-        "longitude": 81.5,
-        "source": "GPS",
-        "accuracyMeters": 8
-      }
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### PUT `/camera-trap-images/{id}`
-
-Submit manually uploaded camera image.
-
-Access: PARK_MANAGER, RESEARCHER.
-
-Camera determines park/area; caller must be authorized. First upload camera media with PUT /media/cccccccc-cccc-4ccc-8ccc-cccccccccccc and multipart category=CAMERA_TRAP, parkId=park-yala as the researcher/manager. Media must belong to caller, share park and have CAMERA_TRAP category. Store capture time separately from upload time. Server sets PENDING_REVIEW. Sensor ingestion is deferred.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `99999999-9999-4999-8999-999999999999` |
-
-Request: `application/json`; schema `CameraImageRequest`.
-
-```json
-{
-  "cameraTrapId": "CT-003",
-  "mediaId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-  "capturedAt": "2026-10-08T00:50:00Z"
-}
-```
-
-Response: **201**, `application/json`.
-
-```json
-{
-  "id": "99999999-9999-4999-8999-999999999999",
-  "cameraTrapId": "CT-003",
-  "mediaId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-  "capturedAt": "2026-10-08T00:50:00Z",
-  "parkId": "park-yala",
-  "status": "PENDING_REVIEW",
-  "uploadedBy": "usr-researcher-1",
-  "createdAt": "2026-10-08T06:41:00Z"
-}
-```
-
-First creation returns a `Location` header pointing to the resource; identical replay returns the same object with 200.
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-### GET `/camera-trap-images`
-
-List camera images.
-
-Access: PARK_MANAGER, RESEARCHER.
-
-Authorized-park images, newest capture first. Image bytes downloaded separately.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `parkId` | query | Yes | string | `park-yala` |
-| `cameraTrapId` | query | No | string | `CT-003` |
-| `status` | query | No | PENDING_REVIEW / REVIEWED | `PENDING_REVIEW` |
-| `page` | query | No | integer | `0` |
-| `size` | query | No | integer | `20` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "items": [
-    {
-      "id": "99999999-9999-4999-8999-999999999999",
-      "cameraTrapId": "CT-003",
-      "mediaId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      "capturedAt": "2026-10-08T00:50:00Z",
-      "parkId": "park-yala",
-      "status": "PENDING_REVIEW",
-      "uploadedBy": "usr-researcher-1",
-      "createdAt": "2026-10-08T06:41:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalItems": 1
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### GET `/camera-trap-images/{id}`
-
-Inspect camera image metadata.
-
-Access: PARK_MANAGER, RESEARCHER.
-
-Authorized park scope; review is absent before review.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `99999999-9999-4999-8999-999999999999` |
-
-Request body: none.
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "99999999-9999-4999-8999-999999999999",
-  "cameraTrapId": "CT-003",
-  "mediaId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-  "capturedAt": "2026-10-08T00:50:00Z",
-  "parkId": "park-yala",
-  "status": "PENDING_REVIEW",
-  "uploadedBy": "usr-researcher-1",
-  "createdAt": "2026-10-08T06:41:00Z"
-}
-```
-
-Error statuses: 400, 401, 403, 404, 500, 503. See the common error shape below.
-
-### PUT `/camera-trap-images/{id}/review`
-
-Save species and verification flag.
-
-Access: PARK_MANAGER, RESEARCHER.
-
-Atomic first review stores reviewer/time and sets REVIEWED. Species may be Unknown. possiblePoacher is a requires-verification flag, not a proven identity. Same reviewer/payload retry returns 200; another or different review is 409. No automated species/confidence prediction.
-
-Parameters:
-
-| Name | In | Required | Type | Example |
-| --- | --- | --- | --- | --- |
-| `id` | path | Yes | uuid | `99999999-9999-4999-8999-999999999999` |
-
-Request: `application/json`; schema `CameraReviewRequest`.
-
-```json
-{
-  "species": "Asian elephant",
-  "possiblePoacher": false,
-  "notes": "One elephant visible near the trail."
-}
-```
-
-Response: **200**, `application/json`.
-
-```json
-{
-  "id": "99999999-9999-4999-8999-999999999999",
-  "cameraTrapId": "CT-003",
-  "mediaId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-  "capturedAt": "2026-10-08T00:50:00Z",
-  "parkId": "park-yala",
-  "status": "REVIEWED",
-  "uploadedBy": "usr-researcher-1",
-  "createdAt": "2026-10-08T06:41:00Z",
-  "review": {
-    "species": "Asian elephant",
-    "possiblePoacher": false,
-    "notes": "One elephant visible near the trail.",
-    "reviewedBy": "usr-researcher-1",
-    "reviewedAt": "2026-10-08T06:45:00Z"
-  }
-}
-```
-
-Error statuses: 400, 401, 403, 404, 409, 500, 503. See the common error shape below.
-
-## Common error shape
-
-```json
-{
-  "timestamp": "2026-10-08T06:41:00Z",
-  "status": 400,
-  "code": "VALIDATION_FAILED",
-  "message": "Check the highlighted fields.",
-  "path": "/api/v1/incidents/44444444-4444-4444-8444-444444444444",
-  "fieldErrors": {
-    "description": "must not be blank"
-  }
-}
-```
-
-Important conflict codes: `ID_REUSED_WITH_DIFFERENT_DATA`, `ASSIGNMENT_ALREADY_USED`, `ALERT_ALREADY_ASSIGNED`, `INVALID_ALERT_STATE`, `REVIEW_ALREADY_EXISTS`. A field that references another resource must match its owner, category and park as described by the endpoint. A 201/200 must be returned only after persistence succeeds.
-
-## Request validation checklist
-
-| Schema | Required fields |
+| HTTP | Error code | Trigger |
 | --- | --- | --- |
-| `LoginRequest` | `email`, `password` |
-| `AssignmentRequest` | `routeId`, `rangerId`, `scheduledStartAt`, `scheduledEndAt` |
-| `PatrolRequest` | `assignmentId`, `startedAt`, `endedAt`, `trackPoints`, `waypoints`, `observations` |
-| `MediaUpload` | `file`, `parkId`, `category` |
-| `IncidentRequest` | `parkId`, `areaId`, `type`, `detectedAt`, `location`, `description`, `photoId` |
-| `AlertSetupRequest` | `parkId`, `areaId`, `animal`, `collarId`, `riskLevel`, `location`, `locationUpdatedAt`, `detectedAt` |
-| `DeclineRequest` | `reason` |
-| `SupportRequest` | `requestId`, `reason` |
-| `AlertResponseRequest` | `actionTaken`, `result` |
-| `ReportRequest` | `parkId`, `reportType`, `from`, `to`, `sections` |
-| `CommunityRequest` | `parkId`, `areaId`, `type`, `village`, `occurredAt`, `description` |
-| `CameraImageRequest` | `cameraTrapId`, `mediaId`, `capturedAt` |
-| `CameraReviewRequest` | `species`, `possiblePoacher` |
+| 400 | `VALIDATION_FAILED` | Invalid DTO fields, nonexistent configured community park, or reusing the current password |
+| 400 | `INVALID_REQUEST` | Unknown/server-owned fields or malformed JSON |
+| 401 | `UNAUTHORIZED` | Missing, expired, inactive-account or revoked-token authentication |
+| 401 | `INVALID_CREDENTIALS` | Incorrect current password |
+| 403 | `REGISTRATION_NOT_ALLOWED` | Community registration is disabled for the requested park |
+| 403 | `ACCESS_DENIED` | A non-manager attempts staff creation |
+| 403 | `PARK_ACCESS_DENIED` | A manager assigns a park outside their own scope |
+| 403 | `PASSWORD_CHANGE_REQUIRED` | A temporary-password account calls an operational API |
+| 404 | `NOT_FOUND` | Staff assignment references a nonexistent park within the manager's assigned scope |
+| 409 | `EMAIL_ALREADY_EXISTS` | Email already exists, including concurrent creation |
+| 409 | `PASSWORD_CHANGE_CONFLICT` | Another password/account change wins the conditional update |
+| 503 | `STORAGE_UNAVAILABLE` | Database operation fails |
 
-Cross-field rules: end after start; observed patrol points/waypoints/notes within the patrol time; paired valid date filters; known area within park; active ranger within route park; correct media owner/category/park; cropDetails required for CROP_DAMAGE; assigned officer for support/resolution; bounded history/track arrays. Full field lengths, ranges and enum values are in `openapi.json`.
+`passwordChangeRequired` is included in registration/staff profiles, `login.data.user`, and `GET /auth/me`. While true, protected access is limited to `GET /auth/me` and `POST /auth/change-password`. Existing account documents without the new fields default to false/version zero; existing tokens remain usable until password rotation.
 
-## Integration choices for the deadline
+Flutter community flow: register → login → save JWT → community reporting.
 
-No dedicated endpoints for each wizard step, GPS fix, draft save, sync batch, logout, public account registration, sensor ingestion, SMS or AI prediction in this milestone. Those are local UI operations or identified later integrations. The backend plan explains these scope choices and their limits.
+Flutter staff flow: manager creates account → staff login → inspect `data.user.passwordChangeRequired` → password-change screen → discard JWT → login again → role dashboard.
+
+The Postman collection's **NEW — account onboarding (1.2.0)** folder covers both flows. Set its separate password variables and run the existing manager login before staff creation. Use a fresh email for each creation attempt. Email verification, invitations, and password recovery remain separate integrations.
+
+## Lookups and pagination
+
+All list APIs return `data` shaped as `{"items":[],"page":0,"size":20,"totalItems":0}`. Query parameters: `page` defaults to 0, allowed 0–100000; `size` defaults to 20, allowed 1–100. Lookups sort by name then ID; assignments by scheduled start then ID descending; patrols by completion time then ID descending.
+
+| Endpoint | Additional query parameters | Item fields |
+| --- | --- | --- |
+| `/parks` | None | `id`, `name`, `timezone`, `areas[{id,name}]` |
+| `/users` | Optional `parkId`, optional `role` (default `RANGER`) | `id`, `name`, `role` |
+| `/patrol-routes` | Optional `parkId` | `id`, `parkId`, `areaId`, `name`, `plannedDistanceMeters`, `pathPoints[{latitude,longitude}]` |
+| `/patrol-assignments` | Optional `parkId`, `status=ASSIGNED\|COMPLETED` | Assignment object shown below |
+| `/patrols` | Optional `parkId`, `routeId`, paired `from`/`to` | Patrol summary shown below |
+
+Omitting `parkId` searches assigned parks. An explicitly unauthorized park returns 403. `/patrol-routes/{id}` returns the route object, or 404 when it does not exist.
+
+## Assign a patrol
+
+`PUT /patrol-assignments/11111111-1111-4111-8111-111111111111` request:
+
+```json
+{
+  "routeId": "route-demo", "rangerId": "usr-ranger",
+  "scheduledStartAt": "2026-10-07T01:00:00Z",
+  "scheduledEndAt": "2026-10-07T03:00:00Z"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "id": "11111111-1111-4111-8111-111111111111", "parkId": "park-yala",
+  "routeId": "route-demo", "rangerId": "usr-ranger",
+  "scheduledStartAt": "2026-10-07T01:00:00Z", "scheduledEndAt": "2026-10-07T03:00:00Z",
+  "status": "ASSIGNED", "assignedBy": "usr-manager", "createdAt": "2026-10-07T00:30:00Z"
+}
+```
+
+The route determines the park. The selected user must be an active ranger assigned to that park. End must follow start. A unique database index prevents duplicate assignments for the same ranger and start time; overlapping assignments with different start times are allowed in this milestone.
+
+Creation returns 201 and a `Location` header. An identical retry by the original manager returns 200; different data/manager with the same UUID returns `409 IDEMPOTENCY_CONFLICT`. Assignments are immutable. A completed patrol makes the assignment's returned status `COMPLETED`; status is derived from stored patrols and is filtered before pagination.
+
+## Complete and retrieve a patrol
+
+`PUT /patrols/22222222-2222-4222-8222-222222222222` request:
+
+```json
+{
+  "assignmentId": "11111111-1111-4111-8111-111111111111",
+  "startedAt": "2026-10-07T01:00:00Z", "endedAt": "2026-10-07T03:00:00Z",
+  "trackPoints": [
+    {"latitude":6.37,"longitude":81.50,"recordedAt":"2026-10-07T01:00:00Z","accuracyMeters":8},
+    {"latitude":6.3701,"longitude":81.5001,"recordedAt":"2026-10-07T01:00:30Z","accuracyMeters":8}
+  ],
+  "waypoints": [], "observations": []
+}
+```
+
+Only the assigned ranger can submit. All three arrays are required; empty arrays are allowed. End must follow start and may be no more than 5 minutes in the future. Track times must be ordered; all track, waypoint, and observation times must fall within the patrol. Waypoint and observation IDs must be unique within their respective arrays.
+
+Limits: 10000 track points, 100 waypoints, 100 observations. Latitude −90…90, longitude −180…180, optional accuracy 0…10000 meters. A waypoint requires UUID `id`, `label` (up to 100 characters), `recordedAt`, and `location`, with optional `notes` (up to 1000 characters). An observation requires UUID `id`, `text` (up to 2000 characters), `observedAt`, and `location`. Location is `{"latitude":6.37,"longitude":81.5,"source":"GPS","accuracyMeters":8}`, with source `GPS` or `MANUAL`. Optional accuracy/notes may be omitted or null. IDs submitted as UUIDs must use lowercase hexadecimal characters. Use timestamps with UTC `Z` or an explicit offset; MongoDB persists timestamps at millisecond precision.
+
+Distance uses the Haversine formula on adjacent GPS points. It excludes gaps greater than 120 seconds, equal timestamps, and segments containing a fix with reported accuracy over 100 meters. Manual waypoints do not add distance.
+
+Creation returns 201 and `Location`; identical retries by the ranger return 200. Changed reuse of the same UUID returns `409 IDEMPOTENCY_CONFLICT`; a different UUID for an already completed assignment returns `409 ASSIGNMENT_ALREADY_USED`. Unique indexes and insert-only writes enforce these rules under concurrent requests.
+
+`GET /patrols` returns summaries containing `id`, `assignmentId`, `routeId`, `parkId`, `rangerId`, `status=COMPLETED`, `startedAt`, `endedAt`, `recordedDistanceMeters`, `waypointCount`, `observationCount`, `createdAt`. It excludes GPS arrays. `GET /patrols/{id}` and the PUT response include these fields plus `trackPoints`, `waypoints`, `observations`. Another ranger's record returns 404.
+
+For date filtering, supply `parkId`, `from`, and `to` together, e.g. `/patrols?parkId=park-yala&from=2026-10-01&to=2026-10-07`. Dates are inclusive in the park's timezone, filter on patrol completion, and allow at most 92 days.
+
+## Error codes
+
+| HTTP | Common codes |
+| --- | --- |
+| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST` |
+| 401 | `INVALID_CREDENTIALS`, `UNAUTHORIZED` |
+| 403 | `ACCESS_DENIED`, `PARK_ACCESS_DENIED` |
+| 404 | `NOT_FOUND` |
+| 409 | `IDEMPOTENCY_CONFLICT`, `ASSIGNMENT_SCHEDULE_CONFLICT`, `ASSIGNMENT_ALREADY_USED` |
+| 413 | `FILE_TOO_LARGE` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE`, `UNSUPPORTED_IMAGE_TYPE` |
+| 500 | `INTERNAL_ERROR`, `REPORT_RENDERING_FAILED` |
+| 503 | `STORAGE_UNAVAILABLE` |
+
+The authenticated user determines actor IDs, roles, and park permissions. Patrols derive their park/ranger/route from the assignment; camera images derive their park from the camera trap. Other resource bodies explicitly identify the park/area when required by their schema. Do not send reporter/officer/reviewer IDs, statuses, creation timestamps, or computed counts/distance. Unknown JSON fields are rejected.
+
+## Media and incident flow
+
+Upload `PUT /media/{uuid}` with multipart fields `file`, `parkId`, `category`. The declared MIME type must match decoded JPEG/PNG content; maximum 5 MiB and 20 million pixels. Categories: ranger `INCIDENT`/`ALERT_RESPONSE`; liaison `ALERT_RESPONSE`; member `COMMUNITY_REPORT`; manager/researcher `CAMERA_TRAP`. Media responses contain `id`, `parkId`, `category`, `contentType`, `sizeBytes`, `contentUrl`, `createdAt`. Identical owner/park/category/bytes retry returns 200; changed reuse returns 409. `GET /media/{id}/content` is authenticated and returns JPEG/PNG bytes. Unlinked images are owner-only; linked images can also be read by users permitted to read their parent resource.
+
+Ranger flow: upload `INCIDENT` image → `PUT /incidents/{uuid}` → list/get the submitted incident. Request:
+
+```json
+{
+  "parkId":"park-yala", "areaId":"area-b1", "type":"SNARE",
+  "detectedAt":"2026-10-07T04:54:00Z",
+  "location":{"latitude":6.35,"longitude":81.5,"source":"GPS","accuracyMeters":8},
+  "description":"Wire snare found beside the trail.",
+  "photoId":"33333333-3333-4333-8333-333333333333"
+}
+```
+
+The service verifies area membership, an observation time no more than five minutes in the future, and owned evidence in the correct park/category. Optional `assignmentId` must belong to the same ranger/park. Response adds `id`, `reportedBy`, `status=SUBMITTED`, `createdAt`. Rangers read their own incidents; managers read their parks. List filters: optional `parkId`, `type`, `areaId`, paired `from`/`to`, `page`, `size`. Dates filter `detectedAt` in the park's timezone, up to 92 days.
+
+## Alert flow
+
+Manager `PUT /alerts/{uuid}` accepts `parkId`, `areaId`, `animal`, `collarId`, `riskLevel=LOW|MEDIUM|HIGH`, `location`, `locationUpdatedAt`, `detectedAt`. It creates `NEW`; this is manual setup. The recorded observation times are retained on GET.
+
+Officer flow: list alerts → GET details → `POST /alerts/{id}/accept` with no body → optional support → `PUT /alerts/{id}/response`. Acceptance atomically sets `RESPONDING`, `assignedOfficerId`, `acceptedAt`. A concurrent different officer loses with `409 ALERT_ALREADY_ASSIGNED`; the same officer's retry returns the current alert.
+
+`POST /alerts/{id}/decline` accepts `{"reason":"Already responding elsewhere."}` before acceptance. It records one reason per officer and leaves `NEW`. Exact retries return the original receipt; changed reasons return 409. Declines are limited to 100 officers. A declined officer cannot accept that alert.
+
+`POST /alerts/{id}/support` accepts `{"requestId":"66666666-6666-4666-8666-666666666666","reason":"Additional officers needed."}`. Only the assigned responding officer can request support. Up to 20 requests are stored; exact request-ID retries return the existing `REQUESTED` receipt. Changed reuse returns 409. This records a request without sending a notification.
+
+Response request: `{"actionTaken":"Guided the elephant away.","result":"Returned to the forest.","notes":"No injuries.","photoIds":[]}`. Notes/photos are optional. Missing/null `photoIds` becomes an empty list; lists allow at most three distinct, non-null owned `ALERT_RESPONSE` image IDs. The assigned officer's response and `RESOLVED` state save atomically. Exact retry is safe; changed final responses return 409. Failed persistence retains the prior state.
+
+List filters are optional `parkId`, `status`, `page`, `size`. Officers see non-declined new alerts, their responding alerts, and resolved history; managers see all alerts in their parks. Details are park scoped. Invalid state changes return `409 ALERT_STATE_CONFLICT`; a full support list returns `409 SUPPORT_LIMIT_REACHED`.
+
+## Analytics and reports
+
+`GET /analytics/summary?parkId=park-yala&from=2026-10-01&to=2026-10-07` requires all three parameters. Dates are inclusive park-local dates, at most 92 days. Response includes type/daily/area incident counts, community report count, resolved alert count, and route coverage. Daily series includes zero-count dates. Areas with at least three incidents are potential hotspots.
+
+Coverage basis is `ASSIGNED_ROUTES_COMPLETED`: unique routes with assignments starting in the period are the denominator; those routes with a linked patrol ending in that period are the numerator. No assignments gives `coveragePercent=null`. This measures route completion. No stored activity gives `dataAvailable=false`; database failures return 503.
+
+`PUT /reports/{uuid}` request:
+
+```json
+{"parkId":"park-yala","reportType":"MONTHLY_CONSERVATION","from":"2026-10-01","to":"2026-10-07",
+ "sections":["INCIDENT_STATISTICS","INCIDENT_TRENDS","HOTSPOT_SUMMARY","PATROL_COVERAGE","CONFLICT_SUMMARY"]}
+```
+
+Types: `MONTHLY_CONSERVATION`, `INCIDENTS`, `PATROL_COVERAGE`, `CONFLICTS`. Choose one to five distinct sections. Creation saves a complete immutable analytics snapshot and returns metadata plus `snapshot`, `status=GENERATED`, `generatedBy`, `generatedAt`, `downloadUrl`. Identical retry returns the original snapshot without recalculating it. `GET /reports?parkId=...` returns paged metadata; GET details includes the snapshot. `GET /reports/{id}/download` returns `application/pdf` with an attachment filename. Managers read reports in their parks. PDFs include only the selected sections and are generated from the saved snapshot.
+
+## Community and camera flows
+
+Member `PUT /community-reports/{uuid}` requires `parkId`, `areaId`, `type=WILDLIFE_SIGHTING|CROP_DAMAGE`, `village`, `occurredAt`, `description`. Sightings also require `species`; crop damage requires `cropDetails`. Location and an owned `COMMUNITY_REPORT` photo are optional. Response adds `id`, `reportedBy`, `status=SUBMITTED`, `createdAt`. Members read their own reports; managers/liaison officers read their parks. List filters match incidents, with dates filtering `occurredAt`. These endpoints implement app reporting; SMS ingestion remains external integration work.
+
+Manager/researcher flow: `GET /camera-traps?parkId=...` → upload a `CAMERA_TRAP` image → `PUT /camera-trap-images/{uuid}` with `{"cameraTrapId":"CT-DEMO","mediaId":"33333333-3333-4333-8333-333333333333","capturedAt":"2026-10-07T04:00:00Z"}`. The service validates trap access and image ownership/category, then sets `PENDING_REVIEW`. List requires `parkId`, with optional `cameraTrapId`, `status`, and pagination.
+
+`PUT /camera-trap-images/{id}/review` accepts `{"species":"Elephant","possiblePoacher":false,"notes":"Clear image."}`. Species and the boolean are required; notes are optional. Review atomically sets `REVIEWED` and records reviewer/time. Exact retries by that reviewer return the existing record; changed reviews or a second reviewer return 409. `possiblePoacher=true` is a verification flag. Reviews are manual and final in this milestone.

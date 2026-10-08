@@ -1,6 +1,6 @@
 # Wildlife conservation backend
 
-The backend implements **36 APIs** under `http://localhost:8080/api/v1`: authentication, parks/users, patrols, media, incidents, alerts, analytics/reports, community reporting, and camera monitoring.
+The backend implements **39 APIs** under `http://localhost:8080/api/v1`: authentication, parks/users, patrols, media, incidents, alerts, analytics/reports, community reporting, and camera monitoring.
 
 The read-only `cdb-merchant` soundbox registration API informed the organization: controller → validated request DTO → explicit mapper → domain request → service interface → service implementation → repository/entity → response DTO → response generator. Controllers validate and map inputs, then return the service response directly. Feature services perform lookups, business checks, persistence, DTO mapping, and response generation. Dependencies use constructor injection. Responses use the reference-style `status`, `description`, `data`, and `error` envelope, with meaningful HTTP error codes.
 
@@ -13,7 +13,9 @@ Services are grouped by feature, with one interface and implementation per featu
 | Service | Responsibility | Controllers |
 | --- | --- | --- |
 | `LoginService` | Login and authentication workflow | `LoginController` |
-| `UserService` | Current profile and active user lookup | `ProfileController`, `UserController` |
+| `RegistrationService` | Community sign-up in enabled parks | `RegistrationController` |
+| `PasswordService` | Own-password changes and token invalidation | `PasswordController` |
+| `UserService` | Current profile, user lookup, and manager-created staff | `ProfileController`, `UserController` |
 | `ParkService` | Park lookup and park access checks | `ParkController` |
 | `PatrolService` | Routes, assignments, completed patrols, and ownership checks | `PatrolRouteController`, `PatrolAssignmentController`, `PatrolController` |
 | `MediaService` | Validated image uploads, attachment ownership, and authorized downloads | `MediaController` |
@@ -72,6 +74,18 @@ The optional demo seed creates one park (`park-yala`), area `area-b1`, one route
 | `community@wildguard.local` | `usr-community` | COMMUNITY_MEMBER |
 
 Seed runs preserve existing data and passwords. The route coordinates are demonstration data. For Flutter web, set `CORS_ALLOWED_ORIGINS` to the exact comma-separated browser origins. Native Flutter does not require CORS configuration. Set `PORT` to change the default port 8080.
+
+## Account onboarding — new in 1.2.0
+
+- `POST /api/v1/auth/register`: public community registration; the backend always assigns `COMMUNITY_MEMBER`.
+- `POST /api/v1/users`: managers create ranger, liaison, or researcher accounts within their own parks.
+- `POST /api/v1/auth/change-password`: authenticated users change their own password.
+
+Community registration accepts only existing parks in `COMMUNITY_REGISTRATION_PARK_IDS` (default `park-yala`; comma-separated IDs; empty disables registration). Set this in the local `.env` or deployment environment. New passwords require 15–72 Unicode code points and at most 72 UTF-8 bytes. Duplicate normalized emails return 409.
+
+New staff accounts have `passwordChangeRequired=true`. Their JWT permits profile access and password change; other protected APIs return `403 PASSWORD_CHANGE_REQUIRED`. After changing a password, every existing token is revoked, and the user must log in again. Existing MongoDB accounts default to no required password change until explicitly provisioned as new staff. The first manager uses trusted setup; the development seed creates the demo manager.
+
+See the newly added account API section in the [API guide](docs/implemented-api.md) for complete requests, responses, errors, and Flutter flows. Both `openapi.json` and `implemented-openapi.json` now describe the current 39-operation contract.
 
 ## API usage and checks
 

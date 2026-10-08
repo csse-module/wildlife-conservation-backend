@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Wildlife conservation — milestone 1",
+    "name": "Wildlife conservation — implemented APIs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "All 36 implemented APIs. Log in as the required role, select an image file for uploads, and set mediaCategory to match its feature. Requests use baseUrl and the stored token."
+    "description": "All 39 implemented APIs. NEW account onboarding folder includes community registration, staff creation, and password change. Set the separate communityPassword, temporaryPassword, newPassword variables. Staff must change the temporary password then log in again; password change clears the stored token. Other requests use baseUrl and the stored token; select an image file for uploads."
   },
   "variable": [
     {
@@ -84,6 +84,30 @@
     {
       "key": "mediaCategory",
       "value": "INCIDENT"
+    },
+    {
+      "key": "communityEmail",
+      "value": "new.member@example.com"
+    },
+    {
+      "key": "communityPassword",
+      "value": ""
+    },
+    {
+      "key": "staffEmail",
+      "value": "new.ranger@example.com"
+    },
+    {
+      "key": "temporaryPassword",
+      "value": ""
+    },
+    {
+      "key": "newPassword",
+      "value": ""
+    },
+    {
+      "key": "staffUserId",
+      "value": ""
     }
   ],
   "auth": {
@@ -1301,6 +1325,257 @@
             }
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "NEW — account onboarding (1.2.0)",
+      "description": "Community: register -> login. Staff: manager login using the existing request -> create staff -> staff login with temporary password -> change password -> staff login with new password. Required passwords are 15-72 Unicode code points and <=72 UTF-8 bytes.",
+      "item": [
+        {
+          "name": "NEW: Register community member",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Community Member\",\n  \"email\": \"{{communityEmail}}\",\n  \"password\": \"{{communityPassword}}\",\n  \"parkId\": \"{{parkId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login registered community member",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{communityEmail}}\",\n  \"password\": \"{{communityPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NEW: Create staff account (manager token)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Ranger\",\n  \"email\": \"{{staffEmail}}\",\n  \"temporaryPassword\": \"{{temporaryPassword}}\",\n  \"role\": \"RANGER\",\n  \"parkIds\": [\n    \"{{parkId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"staffUserId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff login with temporary password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{temporaryPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NEW: Change own password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/change-password",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{temporaryPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", \"\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff login after password change",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Wildlife conservation — implemented APIs",
-    "version": "1.1.0",
-    "description": "36 implemented APIs. JSON uses the shared response-generator envelope. Image/PDF downloads return binary content. See implemented-api.md for flows, business rules, and setup."
+    "version": "1.2.0",
+    "description": "39 implemented APIs. Added in 1.2.0: community registration, manager-created staff accounts, and password changes. JSON uses the response-generator envelope. Image/PDF downloads return binary content. Temporary-password accounts can access only profile and password change among protected APIs. Password changes invalidate previously issued tokens. See implemented-api.md for flows and setup."
   },
   "servers": [
     {
@@ -25,7 +25,7 @@
         "summary": "Sign in",
         "operationId": "post_Authentication_1",
         "x-roles": [],
-        "description": "Only this operation is public. Validate active account and BCrypt password; generic 401 for invalid credentials. The token string in this example is a placeholder.",
+        "description": "Public login. Validate the active account and BCrypt password; generic 401 for invalid credentials. login.data.user.passwordChangeRequired tells Flutter to show password change for temporary staff credentials. The token string in this example is a placeholder.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -75,7 +75,8 @@
                       "role": "RANGER",
                       "parkIds": [
                         "park-yala"
-                      ]
+                      ],
+                      "passwordChangeRequired": false
                     }
                   },
                   "error": {
@@ -142,7 +143,7 @@
           "RESEARCHER",
           "COMMUNITY_MEMBER"
         ],
-        "description": "Return the active account from the authenticated subject. Never include password hashes.",
+        "description": "Return the active account from the authenticated subject. Never include password hashes. Available during the required first password change; includes passwordChangeRequired.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -188,7 +189,8 @@
                     "role": "RANGER",
                     "parkIds": [
                       "park-yala"
-                    ]
+                    ],
+                    "passwordChangeRequired": false
                   },
                   "error": {
                     "errorCode": "00",
@@ -242,7 +244,7 @@
           "RESEARCHER",
           "COMMUNITY_MEMBER"
         ],
-        "description": "Return only parks assigned to this account, including their known areas and timezone.",
+        "description": "Return only parks assigned to this account, including their known areas and timezone. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -364,7 +366,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/users": {
@@ -377,7 +380,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "List active users sharing the manager's assigned parks. Optional parkId and role; role defaults to RANGER.",
+        "description": "List active users sharing the manager's assigned parks. Optional parkId and role; role defaults to RANGER. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -518,7 +521,130 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create a staff account",
+        "operationId": "createStaff",
+        "x-added-in": "1.2.0",
+        "x-roles": [
+          "PARK_MANAGER"
+        ],
+        "description": "NEW in 1.2.0. A PARK_MANAGER with a completed password change can create RANGER, LIAISON_OFFICER or RESEARCHER accounts. All 1-20 requested parkIds must exist and belong to the manager. Creates an active account with passwordChangeRequired=true. The password is hashed and never returned; share the initial password with the staff member separately. Unsupported roles return 400, outside-scope parks return 403 and nonexistent assigned parks return 404. Duplicate normalized emails return 409. Staff login -> profile/password change -> login again before operational APIs are available. Public manager creation is unavailable.",
+        "responses": {
+          "201": {
+            "description": "Created account; log in separately. No Location header.",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Request correlation ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "description",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "00"
+                      ]
+                    },
+                    "description": {
+                      "type": "string",
+                      "enum": [
+                        "SUCCESS"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserProfile"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "00",
+                  "description": "SUCCESS",
+                  "data": {
+                    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "name": "New Ranger",
+                    "email": "new.ranger@example.com",
+                    "role": "RANGER",
+                    "parkIds": [
+                      "park-yala"
+                    ],
+                    "passwordChangeRequired": true
+                  },
+                  "error": {
+                    "errorCode": "00",
+                    "errorDescription": "SUCCESS",
+                    "fieldErrors": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/EmailAlreadyExists"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffCreateRequest"
+              },
+              "example": {
+                "name": "New Ranger",
+                "email": "new.ranger@example.com",
+                "temporaryPassword": "temporary-staff-password",
+                "role": "RANGER",
+                "parkIds": [
+                  "park-yala"
+                ]
+              }
+            }
+          }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/patrol-routes": {
@@ -532,7 +658,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Seed routes for the first milestone; routes are not edited through this contract.",
+        "description": "Seed routes for the first milestone; routes are not edited through this contract. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -668,7 +794,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/patrol-routes/{id}": {
@@ -682,7 +809,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Park-scoped route geometry and metadata.",
+        "description": "Park-scoped route geometry and metadata. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -787,7 +914,8 @@
             },
             "example": "route-demo"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/patrol-assignments/{id}": {
@@ -800,7 +928,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Route determines park/area. Ranger must be active and assigned to that park; end must be after start. Reject a second assignment for the same ranger/start instant. Identical UUID/payload replay returns 200; changed replay returns 409. No general overlap scheduler.",
+        "description": "Route determines park/area. Ranger must be active and assigned to that park; end must be after start. Reject a second assignment for the same ranger/start instant. Identical UUID/payload replay returns 200; changed replay returns 409. No general overlap scheduler. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -992,7 +1120,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/patrol-assignments": {
@@ -1006,7 +1135,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Ranger sees own assignments. Manager sees authorized-park assignments. Status is derived from submitted completed patrols.",
+        "description": "Ranger sees own assignments. Manager sees authorized-park assignments. Status is derived from submitted completed patrols. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1149,7 +1278,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/patrols/{id}": {
@@ -1162,7 +1292,7 @@
         "x-roles": [
           "RANGER"
         ],
-        "description": "Immutable completed snapshot; active recording remains local. Validate assignment ownership, one patrol per assignment, ordered timestamps and location/array limits. Compute distance from continuous GPS segments, ignoring gaps over 120 seconds and fixes with reported accuracy worse than 100 meters; manual waypoints do not add travel distance. Identical replay is safe; changed replay or reused assignment is 409. End may be at most five minutes in the future. Equal-time GPS segments add no distance.",
+        "description": "Immutable completed snapshot; active recording remains local. Validate assignment ownership, one patrol per assignment, ordered timestamps and location/array limits. Compute distance from continuous GPS segments, ignoring gaps over 120 seconds and fixes with reported accuracy worse than 100 meters; manual waypoints do not add travel distance. Identical replay is safe; changed replay or reused assignment is 409. End may be at most five minutes in the future. Equal-time GPS segments add no distance. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -1479,7 +1609,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -1491,7 +1622,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Owner ranger or authorized park manager. Includes stored waypoints, observations and track points.",
+        "description": "Owner ranger or authorized park manager. Includes stored waypoints, observations and track points. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1632,7 +1763,8 @@
             },
             "example": "22222222-2222-4222-8222-222222222222"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/patrols": {
@@ -1646,7 +1778,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Summary projection excludes GPS arrays. Rangers see their own patrols, managers their parks. For date filtering provide parkId, from and to together; inclusive park-local completion dates, maximum 92 days.",
+        "description": "Summary projection excludes GPS arrays. Rangers see their own patrols, managers their parks. For date filtering provide parkId, from and to together; inclusive park-local completion dates, maximum 92 days. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1811,7 +1943,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/media/{id}": {
@@ -1828,7 +1961,7 @@
           "RESEARCHER",
           "COMMUNITY_MEMBER"
         ],
-        "description": "Multipart form fields file, parkId and category. Decode/validate JPEG or PNG, max 5 MiB. Category must match role: ranger INCIDENT/ALERT_RESPONSE; liaison ALERT_RESPONSE; community member COMMUNITY_REPORT; researcher/manager CAMERA_TRAP. Same UUID, owner, category, park and bytes returns 200; changed bytes/metadata is 409. Only owner can access unlinked uploads. Decoded images are limited to 20 million pixels.",
+        "description": "Multipart form fields file, parkId and category. Decode/validate JPEG or PNG, max 5 MiB. Category must match role: ranger INCIDENT/ALERT_RESPONSE; liaison ALERT_RESPONSE; community member COMMUNITY_REPORT; researcher/manager CAMERA_TRAP. Same UUID, owner, category, park and bytes returns 200; changed bytes/metadata is 409. Only owner can access unlinked uploads. Decoded images are limited to 20 million pixels. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -2017,7 +2150,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/media/{id}/content": {
@@ -2034,7 +2168,7 @@
           "RESEARCHER",
           "COMMUNITY_MEMBER"
         ],
-        "description": "Owner or caller authorized to read the linked parent record. Unlinked media are owner-only. Authenticated download; never expose local file paths.",
+        "description": "Owner or caller authorized to read the linked parent record. Unlinked media are owner-only. Authenticated download; never expose local file paths. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2092,7 +2226,8 @@
             },
             "example": "33333333-3333-4333-8333-333333333333"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/incidents/{id}": {
@@ -2105,7 +2240,7 @@
         "x-roles": [
           "RANGER"
         ],
-        "description": "Required evidence photo must already exist, belong to this ranger and park, and have INCIDENT category. Optional assignmentId must belong to this ranger in the same park. That assignment can link the incident to a still-local patrol without delaying incident submission; the final patrol uses the same assignmentId. Server sets reporter and SUBMITTED. Only explicitly submitted records are uploaded; no server drafts.",
+        "description": "Required evidence photo must already exist, belong to this ranger and park, and have INCIDENT category. Optional assignmentId must belong to this ranger in the same park. That assignment can link the incident to a still-local patrol without delaying incident submission; the final patrol uses the same assignmentId. Server sets reporter and SUBMITTED. Only explicitly submitted records are uploaded; no server drafts. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -2318,7 +2453,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -2330,7 +2466,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Owner ranger or manager in the incident park.",
+        "description": "Owner ranger or manager in the incident park. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2435,7 +2571,8 @@
             },
             "example": "44444444-4444-4444-8444-444444444444"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/incidents": {
@@ -2449,7 +2586,7 @@
           "PARK_MANAGER",
           "RANGER"
         ],
-        "description": "Ranger sees own incidents; manager sees authorized parks. Dates filter detectedAt; provide both or neither, max 92 days. Page through the list for map points; do not truncate the map silently.",
+        "description": "Ranger sees own incidents; manager sees authorized parks. Dates filter detectedAt; provide both or neither, max 92 days. Page through the list for map points; do not truncate the map silently. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2636,7 +2773,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts/{id}": {
@@ -2649,7 +2787,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Manager-only manual setup for the first milestone, not automatic collar detection. LocationUpdatedAt is the observation time, never the GET time. All park/area and time references are validated. Server sets NEW.",
+        "description": "Manager-only manual setup for the first milestone, not automatic collar detection. LocationUpdatedAt is the observation time, never the GET time. All park/area and time references are validated. Server sets NEW. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -2861,7 +2999,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -2874,7 +3013,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Authorized park scope; preserve locationUpdatedAt. Do not label a stale observation Live.",
+        "description": "Authorized park scope; preserve locationUpdatedAt. Do not label a stale observation Live. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2981,7 +3120,8 @@
             },
             "example": "55555555-5555-4555-8555-555555555555"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts": {
@@ -2996,7 +3136,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Park-scoped; officers see New alerts except their own declines, their own Responding alerts and eligible Resolved history. Managers can inspect all in their parks. Poll in foreground; not background delivery.",
+        "description": "Park-scoped; officers see New alerts except their own declines, their own Responding alerts and eligible Resolved history. Managers can inspect all in their parks. Poll in foreground; not background delivery. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3146,7 +3286,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts/{id}/accept": {
@@ -3160,7 +3301,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "No body. Atomic conditional NEW-to-RESPONDING transition; authenticated officer must be eligible and not have declined. Same officer retry returns 200. Another owner or invalid state is 409.",
+        "description": "No body. Atomic conditional NEW-to-RESPONDING transition; authenticated officer must be eligible and not have declined. Same officer retry returns 200. Another owner or invalid state is 409. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3270,7 +3411,8 @@
             },
             "example": "55555555-5555-4555-8555-555555555555"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts/{id}/decline": {
@@ -3284,7 +3426,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "NEW alerts only, before acceptance. Leave alert NEW and record one decline per officer. Same reason retry returns 200; changed repeated decline or invalid state is 409. Automatic reassignment/escalation is deferred. Declines are limited to 100 distinct officers per alert.",
+        "description": "NEW alerts only, before acceptance. Leave alert NEW and record one decline per officer. Same reason retry returns 200; changed repeated decline or invalid state is 409. Automatic reassignment/escalation is deferred. Declines are limited to 100 distinct officers per alert. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3393,7 +3535,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts/{id}/support": {
@@ -3407,7 +3550,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Assigned officer on RESPONDING alert only. Embed bounded support requests (max 20). Atomic deduplication by requestId: exact replay 200; changed requestId payload 409. REQUESTED means recorded, not delivered.",
+        "description": "Assigned officer on RESPONDING alert only. Embed bounded support requests (max 20). Atomic deduplication by requestId: exact replay 200; changed requestId payload 409. REQUESTED means recorded, not delivered. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3518,7 +3661,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/alerts/{id}/response": {
@@ -3532,7 +3676,7 @@
           "RANGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Assigned officer only. Atomically store response and set RESOLVED in one alert document. Any photos must be owned/park-scoped ALERT_RESPONSE media. Exact response retry returns 200; a changed final response or invalid state returns 409. Failed persistence leaves RESPONDING. Omitted or null photoIds are treated as an empty list; null list elements are invalid.",
+        "description": "Assigned officer only. Atomically store response and set RESOLVED in one alert document. Any photos must be owned/park-scoped ALERT_RESPONSE media. Exact response retry returns 200; a changed final response or invalid state returns 409. Failed persistence leaves RESPONDING. Omitted or null photoIds are treated as an empty list; null list elements are invalid. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3666,7 +3810,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       }
     },
     "/analytics/summary": {
@@ -3679,7 +3824,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503.",
+        "description": "Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3973,7 +4118,8 @@
             },
             "example": "2026-08-31"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/reports/{id}": {
@@ -3986,7 +4132,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download.",
+        "description": "Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -4561,7 +4707,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -4572,7 +4719,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Read the stored immutable snapshot, not current analytics.",
+        "description": "Read the stored immutable snapshot, not current analytics. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4860,7 +5007,8 @@
             },
             "example": "77777777-7777-4777-8777-777777777777"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/reports": {
@@ -4873,7 +5021,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Reports in authorized parks; snapshot omitted from list.",
+        "description": "Reports in authorized parks; snapshot omitted from list. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -5007,7 +5155,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/reports/{id}/download": {
@@ -5020,7 +5169,7 @@
         "x-roles": [
           "PARK_MANAGER"
         ],
-        "description": "Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement.",
+        "description": "Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -5078,7 +5227,8 @@
             },
             "example": "77777777-7777-4777-8777-777777777777"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/community-reports/{id}": {
@@ -5091,7 +5241,7 @@
         "x-roles": [
           "COMMUNITY_MEMBER"
         ],
-        "description": "Member has authorized park; server sets reporter and SUBMITTED. Require cropDetails for CROP_DAMAGE. Location coordinates may be omitted when only village/landmark is known. Any photo must be owned COMMUNITY_REPORT media in the same park. No SMS ingestion or automatic alert creation in this operation. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional.",
+        "description": "Member has authorized park; server sets reporter and SUBMITTED. Require cropDetails for CROP_DAMAGE. Location coordinates may be omitted when only village/landmark is known. Any photo must be owned COMMUNITY_REPORT media in the same park. No SMS ingestion or automatic alert creation in this operation. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -5289,7 +5439,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -5302,7 +5453,7 @@
           "PARK_MANAGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Owner member or authorized park manager/liaison only. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional.",
+        "description": "Owner member or authorized park manager/liaison only. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -5402,7 +5553,8 @@
             },
             "example": "88888888-8888-4888-8888-888888888888"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/community-reports": {
@@ -5417,7 +5569,7 @@
           "PARK_MANAGER",
           "LIAISON_OFFICER"
         ],
-        "description": "Member sees own records only; manager/liaison sees their parks. Dates filter occurredAt, both or neither, maximum 92 days. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional.",
+        "description": "Member sees own records only; manager/liaison sees their parks. Dates filter occurredAt, both or neither, maximum 92 days. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -5594,7 +5746,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/camera-traps": {
@@ -5608,7 +5761,7 @@
           "PARK_MANAGER",
           "RESEARCHER"
         ],
-        "description": "Seeded camera-trap metadata in authorized parks.",
+        "description": "Seeded camera-trap metadata in authorized parks. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -5738,7 +5891,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/camera-trap-images/{id}": {
@@ -5752,7 +5906,7 @@
           "PARK_MANAGER",
           "RESEARCHER"
         ],
-        "description": "Camera determines park/area; caller must be authorized. First upload camera media with PUT /media/cccccccc-cccc-4ccc-8ccc-cccccccccccc and multipart category=CAMERA_TRAP, parkId=park-yala as the researcher/manager. Media must belong to caller, share park and have CAMERA_TRAP category. Store capture time separately from upload time. Server sets PENDING_REVIEW. Sensor ingestion is deferred.",
+        "description": "Camera determines park/area; caller must be authorized. First upload camera media with PUT /media/cccccccc-cccc-4ccc-8ccc-cccccccccccc and multipart category=CAMERA_TRAP, parkId=park-yala as the researcher/manager. Media must belong to caller, share park and have CAMERA_TRAP category. Store capture time separately from upload time. Server sets PENDING_REVIEW. Sensor ingestion is deferred. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "201": {
             "description": "Successful response",
@@ -5937,7 +6091,8 @@
               }
             }
           }
-        }
+        },
+        "x-requires-password-change-completed": true
       },
       "get": {
         "tags": [
@@ -5949,7 +6104,7 @@
           "PARK_MANAGER",
           "RESEARCHER"
         ],
-        "description": "Authorized park scope; review is absent before review.",
+        "description": "Authorized park scope; review is absent before review. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -6045,7 +6200,8 @@
             },
             "example": "99999999-9999-4999-8999-999999999999"
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/camera-trap-images": {
@@ -6059,7 +6215,7 @@
           "PARK_MANAGER",
           "RESEARCHER"
         ],
-        "description": "Authorized-park images, newest capture first. Image bytes downloaded separately.",
+        "description": "Authorized-park images, newest capture first. Image bytes downloaded separately. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -6212,7 +6368,8 @@
             },
             "example": 20
           }
-        ]
+        ],
+        "x-requires-password-change-completed": true
       }
     },
     "/camera-trap-images/{id}/review": {
@@ -6226,7 +6383,7 @@
           "PARK_MANAGER",
           "RESEARCHER"
         ],
-        "description": "Atomic first review stores reviewer/time and sets REVIEWED. Species may be Unknown. possiblePoacher is a requires-verification flag, not a proven identity. Same reviewer/payload retry returns 200; another or different review is 409. No automated species/confidence prediction.",
+        "description": "Atomic first review stores reviewer/time and sets REVIEWED. Species may be Unknown. possiblePoacher is a requires-verification flag, not a proven identity. Same reviewer/payload retry returns 200; another or different review is 409. No automated species/confidence prediction. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -6344,6 +6501,230 @@
                 "species": "Asian elephant",
                 "possiblePoacher": false,
                 "notes": "One elephant visible near the trail."
+              }
+            }
+          }
+        },
+        "x-requires-password-change-completed": true
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a community member",
+        "operationId": "registerCommunityMember",
+        "x-added-in": "1.2.0",
+        "x-roles": [],
+        "description": "NEW in 1.2.0. Public registration fixes the role to COMMUNITY_MEMBER and creates an active account with passwordChangeRequired=false. parkId must exist and be in COMMUNITY_REGISTRATION_PARK_IDS (default park-yala; empty disables public registration). Names are trimmed and emails are lowercased. Unknown/server-owned fields such as role, active, id, parkIds or tokenVersion are rejected. Duplicate normalized emails return 409. No JWT is issued; call /auth/login next. Email ownership verification is outside this milestone.",
+        "responses": {
+          "201": {
+            "description": "Created account; log in separately. No Location header.",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Request correlation ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "description",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "00"
+                      ]
+                    },
+                    "description": {
+                      "type": "string",
+                      "enum": [
+                        "SUCCESS"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserProfile"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "00",
+                  "description": "SUCCESS",
+                  "data": {
+                    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "name": "Nimal Perera",
+                    "email": "nimal@example.com",
+                    "role": "COMMUNITY_MEMBER",
+                    "parkIds": [
+                      "park-yala"
+                    ],
+                    "passwordChangeRequired": false
+                  },
+                  "error": {
+                    "errorCode": "00",
+                    "errorDescription": "SUCCESS",
+                    "fieldErrors": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "403": {
+            "$ref": "#/components/responses/RegistrationNotAllowed"
+          },
+          "409": {
+            "$ref": "#/components/responses/EmailAlreadyExists"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationRequest"
+              },
+              "example": {
+                "name": "Nimal Perera",
+                "email": "nimal@example.com",
+                "password": "my-community-password",
+                "parkId": "park-yala"
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Change the signed-in account password",
+        "operationId": "changeOwnPassword",
+        "x-added-in": "1.2.0",
+        "x-roles": [
+          "PARK_MANAGER",
+          "RANGER",
+          "LIAISON_OFFICER",
+          "RESEARCHER",
+          "COMMUNITY_MEMBER"
+        ],
+        "description": "NEW in 1.2.0. Available to every active authenticated account, including those with temporary passwords. Verify currentPassword against the authenticated subject; newPassword must differ. New passwords require 15-72 Unicode code points and at most 72 UTF-8 bytes. The atomic write clears passwordChangeRequired and increments the internal tokenVersion. ALL previously issued JWTs, including the current token, are invalid after success. Discard tokens and log in again. No userId is accepted and no new token is returned. Concurrent or repeated requests cannot overwrite a completed password change.",
+        "responses": {
+          "200": {
+            "description": "Password changed; discard all stored tokens and log in again.",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Request correlation ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "description",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "00"
+                      ]
+                    },
+                    "description": {
+                      "type": "string",
+                      "enum": [
+                        "SUCCESS"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PasswordChangeResponse"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "00",
+                  "description": "SUCCESS",
+                  "data": {
+                    "passwordChangeRequired": false,
+                    "reloginRequired": true
+                  },
+                  "error": {
+                    "errorCode": "00",
+                    "errorDescription": "SUCCESS",
+                    "fieldErrors": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "401": {
+            "$ref": "#/components/responses/PasswordChangeUnauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/PasswordChangeConflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              },
+              "example": {
+                "currentPassword": "temporary-staff-password",
+                "newPassword": "my-new-private-password"
               }
             }
           }
@@ -7184,6 +7565,10 @@
               "pattern": ".*\\S.*"
             },
             "uniqueItems": true
+          },
+          "passwordChangeRequired": {
+            "type": "boolean",
+            "description": "True for staff accounts awaiting their first password change."
           }
         },
         "required": [
@@ -7191,7 +7576,8 @@
           "name",
           "email",
           "role",
-          "parkIds"
+          "parkIds",
+          "passwordChangeRequired"
         ],
         "additionalProperties": false
       },
@@ -8789,6 +9175,143 @@
           "totalItems"
         ],
         "additionalProperties": false
+      },
+      "RegistrationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "email",
+          "password",
+          "parkId"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": ".*\\S.*"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 72,
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes. Minimum length counts Unicode code points. Password whitespace is preserved.",
+            "pattern": ".*\\S.*"
+          },
+          "parkId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "StaffCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "email",
+          "temporaryPassword",
+          "role",
+          "parkIds"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": ".*\\S.*"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "temporaryPassword": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 72,
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes. Minimum length counts Unicode code points. Password whitespace is preserved.",
+            "pattern": ".*\\S.*"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "RANGER",
+              "LIAISON_OFFICER",
+              "RESEARCHER"
+            ]
+          },
+          "parkIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": ".*\\S.*"
+            }
+          }
+        }
+      },
+      "PasswordChangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72,
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes. Minimum length counts Unicode code points. Password whitespace is preserved.",
+            "pattern": ".*\\S.*"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 72,
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes. Minimum length counts Unicode code points. Password whitespace is preserved.",
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "PasswordChangeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "passwordChangeRequired",
+          "reloginRequired"
+        ],
+        "properties": {
+          "passwordChangeRequired": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "reloginRequired": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        }
       }
     },
     "responses": {
@@ -8905,7 +9428,7 @@
         }
       },
       "Error403": {
-        "description": "Your role cannot perform this operation.",
+        "description": "Role or park access is denied, or the account must change its temporary password.",
         "headers": {
           "X-Request-ID": {
             "schema": {
@@ -8947,14 +9470,42 @@
                 }
               }
             },
-            "example": {
-              "status": "01",
-              "description": "FAIL",
-              "data": {},
-              "error": {
-                "errorCode": "ACCESS_DENIED",
-                "errorDescription": "Your role cannot perform this operation.",
-                "fieldErrors": {}
+            "examples": {
+              "roleDenied": {
+                "value": {
+                  "status": "01",
+                  "description": "FAIL",
+                  "data": {},
+                  "error": {
+                    "errorCode": "ACCESS_DENIED",
+                    "errorDescription": "Your role cannot perform this operation.",
+                    "fieldErrors": {}
+                  }
+                }
+              },
+              "parkDenied": {
+                "value": {
+                  "status": "01",
+                  "description": "FAIL",
+                  "data": {},
+                  "error": {
+                    "errorCode": "PARK_ACCESS_DENIED",
+                    "errorDescription": "You do not have access to this park.",
+                    "fieldErrors": {}
+                  }
+                }
+              },
+              "passwordChangeRequired": {
+                "value": {
+                  "status": "01",
+                  "description": "FAIL",
+                  "data": {},
+                  "error": {
+                    "errorCode": "PASSWORD_CHANGE_REQUIRED",
+                    "errorDescription": "Change your temporary password before using this API.",
+                    "fieldErrors": {}
+                  }
+                }
               }
             }
           }
@@ -9291,6 +9842,246 @@
                 "errorCode": "FILE_TOO_LARGE",
                 "errorDescription": "Images must not exceed 5 MiB.",
                 "fieldErrors": {}
+              }
+            }
+          }
+        }
+      },
+      "EmailAlreadyExists": {
+        "description": "Email is already registered, including a concurrent unique-index conflict.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request correlation ID."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "description",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "01"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "enum": [
+                    "FAIL"
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "example": {
+              "status": "01",
+              "description": "FAIL",
+              "data": {},
+              "error": {
+                "errorCode": "EMAIL_ALREADY_EXISTS",
+                "errorDescription": "An account with this email already exists.",
+                "fieldErrors": {}
+              }
+            }
+          }
+        }
+      },
+      "RegistrationNotAllowed": {
+        "description": "The requested park is not enabled for community registration.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request correlation ID."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "description",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "01"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "enum": [
+                    "FAIL"
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "example": {
+              "status": "01",
+              "description": "FAIL",
+              "data": {},
+              "error": {
+                "errorCode": "REGISTRATION_NOT_ALLOWED",
+                "errorDescription": "Community registration is not enabled for this park.",
+                "fieldErrors": {}
+              }
+            }
+          }
+        }
+      },
+      "PasswordChangeConflict": {
+        "description": "Another password/account update won the conditional write; log in again before retrying.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request correlation ID."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "description",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "01"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "enum": [
+                    "FAIL"
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "example": {
+              "status": "01",
+              "description": "FAIL",
+              "data": {},
+              "error": {
+                "errorCode": "PASSWORD_CHANGE_CONFLICT",
+                "errorDescription": "The account changed. Log in again before retrying.",
+                "fieldErrors": {}
+              }
+            }
+          }
+        }
+      },
+      "PasswordChangeUnauthorized": {
+        "description": "Missing, expired or revoked token, or incorrect current password.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request correlation ID."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "description",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "01"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "enum": [
+                    "FAIL"
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "examples": {
+              "invalidToken": {
+                "value": {
+                  "status": "01",
+                  "description": "FAIL",
+                  "data": {},
+                  "error": {
+                    "errorCode": "UNAUTHORIZED",
+                    "errorDescription": "A valid access token is required.",
+                    "fieldErrors": {}
+                  }
+                }
+              },
+              "wrongCurrentPassword": {
+                "value": {
+                  "status": "01",
+                  "description": "FAIL",
+                  "data": {},
+                  "error": {
+                    "errorCode": "INVALID_CREDENTIALS",
+                    "errorDescription": "The current password is incorrect.",
+                    "fieldErrors": {}
+                  }
+                }
               }
             }
           }

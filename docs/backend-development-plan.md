@@ -1,6 +1,6 @@
 # WildGuard: simple Spring Boot backend plan
 
-Original plan prepared 8 October 2026. All 36 listed API operations are now implemented; see [implemented-api.md](implemented-api.md) and [implemented-openapi.json](implemented-openapi.json) for current contracts. This document preserves the original scope and integration tradeoffs. Automatic collars, external notifications/SMS, and AI classification remain future integrations.
+Original plan prepared 8 October 2026. All 36 original API operations plus three account-onboarding APIs are now implemented (39 total); see [implemented-api.md](implemented-api.md) and [implemented-openapi.json](implemented-openapi.json) for current contracts. This document preserves the original scope and integration tradeoffs. Automatic collars, external notifications/SMS, and AI classification remain future integrations.
 
 ## 1. Decision: use the starter you already have
 
@@ -17,7 +17,7 @@ The deliverables beside this plan are:
 
 | Build now | Keep for a later integration |
 | --- | --- |
-| Seeded accounts, login and role/park checks | Public registration, phone OTP and email password recovery |
+| Seeded initial manager, community registration, manager-created staff, password changes, login and role/park checks | Phone OTP, email verification and password recovery |
 | Seeded parks, areas, routes and camera-trap records | Editors for parks/routes/zones and an administration portal |
 | Manager patrol assignment and ranger completed-patrol upload | Continuous server-side patrol streaming |
 | Incident evidence uploads, submission and retrieval | Cloud media storage and advanced image processing |
@@ -27,7 +27,7 @@ The deliverables beside this plan are:
 
 All six user journeys get usable APIs. For the first demo, create conflict alerts through a manager-only setup endpoint or seed script; poll for them from Flutter. This supports response testing but does **not** fulfill automatic collar-triggered detection or background push delivery. If those are assessed requirements, finish their integration before calling UC3 complete. Similarly, an SMS composer alone does not implement the backend SMS-report channel.
 
-The first version uses seeded community accounts. Real community onboarding is a later task; do not present seeded login as a public registration system.
+Community self-registration and manager-created staff accounts were added in version 1.2.0. Development seeds remain available; see the implemented API guide for onboarding and password-change flows.
 
 ## 3. Simple architecture
 
