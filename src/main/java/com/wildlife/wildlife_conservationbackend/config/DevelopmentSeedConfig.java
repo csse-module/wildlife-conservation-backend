@@ -35,8 +35,8 @@ public class DevelopmentSeedConfig {
                                              CameraTrapRepository cameraTraps,
                                              PasswordEncoder encoder, @Value("${wildlife.seed.password:}") String password) {
         return arguments -> {
-            if (password.length() < 8 || password.getBytes(StandardCharsets.UTF_8).length > 72) {
-                throw new IllegalStateException("DEV_SEED_PASSWORD must contain at least 8 characters and at most 72 UTF-8 bytes.");
+            if (password.codePointCount(0, password.length()) < 6 || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+                throw new IllegalStateException("DEV_SEED_PASSWORD must contain at least 6 characters and at most 72 UTF-8 bytes.");
             }
             String parkId = "park-yala";
             if (!parks.existsById(parkId)) {

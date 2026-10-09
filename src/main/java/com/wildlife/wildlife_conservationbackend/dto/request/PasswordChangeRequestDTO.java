@@ -19,7 +19,7 @@ public class PasswordChangeRequestDTO {
     @Utf8Size(max = 72)
     private String currentPassword;
     @NotBlank
-    @CodePointLength(min = 15, max = 72)
+    @CodePointLength(min = 6, max = 72)
     @Utf8Size(max = 72)
     private String newPassword;
 }

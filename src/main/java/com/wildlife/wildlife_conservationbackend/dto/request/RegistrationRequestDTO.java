@@ -23,7 +23,7 @@ public class RegistrationRequestDTO {
     @Size(max = 254)
     private String email;
     @NotBlank
-    @CodePointLength(min = 15, max = 72)
+    @CodePointLength(min = 6, max = 72)
     @Utf8Size(max = 72)
     private String password;
     @NotBlank

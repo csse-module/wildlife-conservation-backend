@@ -81,7 +81,7 @@ Seed runs preserve existing data and passwords. The route coordinates are demons
 - `POST /api/v1/users`: managers create ranger, liaison, or researcher accounts within their own parks.
 - `POST /api/v1/auth/change-password`: authenticated users change their own password.
 
-Community registration accepts only existing parks in `COMMUNITY_REGISTRATION_PARK_IDS` (default `park-yala`; comma-separated IDs; empty disables registration). Set this in the local `.env` or deployment environment. New passwords require 15–72 Unicode code points and at most 72 UTF-8 bytes. Duplicate normalized emails return 409.
+Community registration accepts only existing parks in `COMMUNITY_REGISTRATION_PARK_IDS` (default `park-yala`; comma-separated IDs; empty disables registration). Set this in the local `.env` or deployment environment. New passwords require 6–72 Unicode code points and at most 72 UTF-8 bytes. Duplicate normalized emails return 409.
 
 New staff accounts have `passwordChangeRequired=true`. Their JWT permits profile access and password change; other protected APIs return `403 PASSWORD_CHANGE_REQUIRED`. After changing a password, every existing token is revoked, and the user must log in again. Existing MongoDB accounts default to no required password change until explicitly provisioned as new staff. The first manager uses trusted setup; the development seed creates the demo manager.
 
@@ -94,7 +94,17 @@ See the newly added account API section in the [API guide](docs/implemented-api.
 - [Postman collection](docs/wildlife-api.postman_collection.json): all endpoints and logins for all five roles. Set its local password variable before use; select a file for multipart image uploads.
 - `./mvnw.cmd clean verify`: compile, run tests, package, and run the existing PMD quality gate. Tests use mocked database boundaries and do not require a running MongoDB.
 
-Logs include HTTP method/path, status, duration, and `X-Request-ID`. Services log successful login, assignment, and completion events. Passwords, tokens, request bodies, and GPS arrays are excluded from logs. Errors are handled centrally and return no stack traces or database details to clients.
+Logs use the same layout as the supplied example:
+
+```text
+[<traceId>][<requestId>][WILDLIFE-CONSERVATION][DEBUG] yyyy-MM-dd HH:mm:ss.SSS [thread] ClassName:line - message
+```
+
+Each HTTP request has request/response BEGIN and END blocks, plus its method, path, status and duration. At `DEBUG` level, the blocks include sanitized headers and JSON bodies. Passwords, tokens, API keys, cookies, names, email addresses and phone numbers are redacted; GPS data is omitted. Binary, multipart, invalid JSON and bodies over 16 KiB are summarized. The request body is logged after the application consumes it, without reading it ahead of the controller. Response capture is bounded and streams the full response to the client, including image/PDF downloads. Errors are handled centrally and return no stack traces or database details to clients.
+
+`APP_LOG_LEVEL` defaults to `DEBUG`; set it to `INFO` for summaries without headers or bodies. `LOG_SERVICE_NAME` changes the service label. Logs appear in the console; optionally set `LOGGING_FILE_NAME=logs/wildlife-conservation.log` to also write a file in the same format. Restart the backend after changing these environment settings. Startup/background logs use `SYSTEM` for IDs when no request context exists.
+
+Every response includes `X-Request-ID` and `X-Trace-ID`, which match the log prefix. A valid incoming `X-Request-ID` is reused. An optional `X-B3-TraceId` (preferred) or `X-Trace-ID` accepts a nonzero 16- or 32-digit hexadecimal trace ID; missing or invalid IDs are generated. Both response headers are exposed to browser clients through CORS.
 
 Images use a persistent directory, configured by `MEDIA_STORAGE_DIR` (default `uploads` beside the application). Keep that directory with the MongoDB data across restarts/deployments. JPEG/PNG files are limited to 5 MiB and 20 million decoded pixels. Upload categories are role restricted; unlinked uploads are owner-only. Linked media follows the parent resource's read permissions. File storage keys and checksums stay internal.
 

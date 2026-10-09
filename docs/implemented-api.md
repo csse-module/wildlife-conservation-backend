@@ -1,6 +1,6 @@
 # Implemented APIs
 
-Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one and returns it in the response header.
+Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one. An optional `X-B3-TraceId` (preferred) or `X-Trace-ID` accepts a nonzero 16- or 32-digit hexadecimal trace ID; missing or invalid values are generated. Responses include `X-Request-ID` and `X-Trace-ID`, matching the request's log prefix.
 
 ## Roles and flows
 
@@ -168,7 +168,7 @@ All previous JWTs, including the token used for this request, become invalid aft
 
 ### Onboarding rules and errors
 
-Names are required, up to 100 characters; emails are required, up to 254 characters. New community passwords, temporary staff passwords, and replacement passwords require **15–72 Unicode code points and at most 72 UTF-8 bytes**. Current passwords may retain the earlier password length; passwords are preserved exactly without trimming. Validation annotations stay on DTOs, including the UTF-8 byte constraint. Request/domain `toString()` excludes credentials.
+Names are required, up to 100 characters; emails are required, up to 254 characters. New community passwords, temporary staff passwords, and replacement passwords require **6–72 Unicode code points and at most 72 UTF-8 bytes**. Current passwords may retain the earlier password length; passwords are preserved exactly without trimming. Validation annotations stay on DTOs, including the UTF-8 byte constraint. Request/domain `toString()` excludes credentials.
 
 Unknown fields are rejected. Public registration cannot accept `role`, `active`, `id`, `parkIds` or `tokenVersion`. Password change cannot accept another user's ID.
 

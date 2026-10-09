@@ -1330,7 +1330,7 @@
     },
     {
       "name": "NEW — account onboarding (1.2.0)",
-      "description": "Community: register -> login. Staff: manager login using the existing request -> create staff -> staff login with temporary password -> change password -> staff login with new password. Required passwords are 15-72 Unicode code points and <=72 UTF-8 bytes.",
+      "description": "Community: register -> login. Staff: manager login using the existing request -> create staff -> staff login with temporary password -> change password -> staff login with new password. Required passwords are 6-72 Unicode code points and <=72 UTF-8 bytes.",
       "item": [
         {
           "name": "NEW: Register community member",

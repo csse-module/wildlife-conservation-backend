@@ -51,8 +51,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::strip)
                 .filter(origin -> !origin.isEmpty()).toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
-        configuration.setExposedHeaders(List.of("X-Request-ID", "Location", "Content-Disposition"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-Trace-ID", "X-B3-TraceId"));
+        configuration.setExposedHeaders(List.of("X-Request-ID", "X-Trace-ID", "Location", "Content-Disposition"));
         configuration.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration(EndPoint.BASE + "/**", configuration);
