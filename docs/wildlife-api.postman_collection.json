@@ -1,0 +1,1723 @@
+{
+  "info": {
+    "name": "Wildlife conservation — implemented APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "All 44 implemented APIs. Community officers can accept and resolve reports. Researchers can use analytics and report APIs. Public registration parks and manager park/route creation are included. NEW account onboarding folder includes community registration, staff creation, and password change. Set the separate communityPassword, temporaryPassword, newPassword variables. Staff must change the temporary password then log in again; password change clears the stored token. Other requests use baseUrl and the stored token; select an image file for uploads."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "parkId",
+      "value": "park-yala"
+    },
+    {
+      "key": "routeId",
+      "value": "route-demo"
+    },
+    {
+      "key": "rangerId",
+      "value": "usr-ranger"
+    },
+    {
+      "key": "assignmentId",
+      "value": "11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "key": "patrolId",
+      "value": "22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "key": "mediaId",
+      "value": "33333333-3333-4333-8333-333333333333"
+    },
+    {
+      "key": "incidentId",
+      "value": "44444444-4444-4444-8444-444444444444"
+    },
+    {
+      "key": "alertId",
+      "value": "55555555-5555-4555-8555-555555555555"
+    },
+    {
+      "key": "supportRequestId",
+      "value": "66666666-6666-4666-8666-666666666666"
+    },
+    {
+      "key": "reportId",
+      "value": "77777777-7777-4777-8777-777777777777"
+    },
+    {
+      "key": "communityReportId",
+      "value": "88888888-8888-4888-8888-888888888888"
+    },
+    {
+      "key": "cameraImageId",
+      "value": "99999999-9999-4999-8999-999999999999"
+    },
+    {
+      "key": "cameraTrapId",
+      "value": "CT-DEMO"
+    },
+    {
+      "key": "areaId",
+      "value": "area-b1"
+    },
+    {
+      "key": "from",
+      "value": "2026-10-01"
+    },
+    {
+      "key": "to",
+      "value": "2026-10-07"
+    },
+    {
+      "key": "mediaCategory",
+      "value": "INCIDENT"
+    },
+    {
+      "key": "communityEmail",
+      "value": "new.member@example.com"
+    },
+    {
+      "key": "communityPassword",
+      "value": ""
+    },
+    {
+      "key": "staffEmail",
+      "value": "new.ranger@example.com"
+    },
+    {
+      "key": "temporaryPassword",
+      "value": ""
+    },
+    {
+      "key": "newPassword",
+      "value": ""
+    },
+    {
+      "key": "staffUserId",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Manager login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"manager@wildguard.local\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Additional role logins",
+      "item": [
+        {
+          "name": "Login liaison",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"liaison@wildguard.local\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login researcher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"researcher@wildguard.local\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login community",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"community@wildguard.local\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. My profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Parks",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/parks"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Eligible rangers",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/users?parkId={{parkId}}&role=RANGER"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Routes",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-routes?parkId={{parkId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Route details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-routes/{{routeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Create assignment (repeat safely)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-assignments/{{assignmentId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"routeId\": \"{{routeId}}\",\n  \"rangerId\": \"{{rangerId}}\",\n  \"scheduledStartAt\": \"2026-10-07T02:30:00Z\",\n  \"scheduledEndAt\": \"2026-10-07T06:30:00Z\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Manager assignments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-assignments?parkId={{parkId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Ranger login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ranger@wildguard.local\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Ranger assignments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-assignments?parkId={{parkId}}&status=ASSIGNED"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Complete patrol (repeat safely)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrols/{{patrolId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"startedAt\": \"2026-10-07T02:45:00Z\",\n  \"endedAt\": \"2026-10-07T06:40:00Z\",\n  \"trackPoints\": [\n    {\n      \"latitude\": 6.35,\n      \"longitude\": 81.5,\n      \"recordedAt\": \"2026-10-07T02:45:00Z\",\n      \"accuracyMeters\": 8\n    },\n    {\n      \"latitude\": 6.3501,\n      \"longitude\": 81.5001,\n      \"recordedAt\": \"2026-10-07T02:45:30Z\",\n      \"accuracyMeters\": 8\n    }\n  ],\n  \"waypoints\": [\n    {\n      \"id\": \"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\",\n      \"label\": \"Fresh footprints\",\n      \"recordedAt\": \"2026-10-07T04:00:00Z\",\n      \"location\": {\n        \"latitude\": 6.35,\n        \"longitude\": 81.5,\n        \"source\": \"GPS\",\n        \"accuracyMeters\": 8\n      }\n    }\n  ],\n  \"observations\": [\n    {\n      \"id\": \"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\",\n      \"text\": \"Fresh elephant footprints near the trail.\",\n      \"observedAt\": \"2026-10-07T04:00:00Z\",\n      \"location\": {\n        \"latitude\": 6.35,\n        \"longitude\": 81.5,\n        \"source\": \"GPS\",\n        \"accuracyMeters\": 8\n      }\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Completed assignments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrol-assignments?parkId={{parkId}}&status=COMPLETED"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Patrol summaries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrols?parkId={{parkId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Patrol details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/patrols/{{patrolId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP status\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "PUT /media/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/media/{{mediaId}}",
+            "description": "Multipart form fields file, parkId and category. Decode/validate JPEG or PNG, max 5 MiB. Category must match role: ranger INCIDENT/ALERT_RESPONSE; liaison ALERT_RESPONSE; community member COMMUNITY_REPORT; researcher/manager CAMERA_TRAP. Same UUID, owner, category, park and bytes returns 200; changed bytes/metadata is 409. Only owner can access unlinked uploads. Decoded images are limited to 20 million pixels.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "parkId",
+                  "type": "text",
+                  "value": "{{parkId}}"
+                },
+                {
+                  "key": "category",
+                  "type": "text",
+                  "value": "{{mediaCategory}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /media/{id}/content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/media/{{mediaId}}/content",
+            "description": "Owner or caller authorized to read the linked parent record. Unlinked media are owner-only. Authenticated download; never expose local file paths."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "item": [
+        {
+          "name": "PUT /incidents/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/incidents/{{incidentId}}",
+            "description": "Required evidence photo must already exist, belong to this ranger and park, and have INCIDENT category. Optional assignmentId must belong to this ranger in the same park. That assignment can link the incident to a still-local patrol without delaying incident submission; the final patrol uses the same assignmentId. Server sets reporter and SUBMITTED. Only explicitly submitted records are uploaded; no server drafts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"assignmentId\": \"11111111-1111-4111-8111-111111111111\",\n  \"type\": \"SNARE\",\n  \"detectedAt\": \"2026-10-07T04:54:00Z\",\n  \"location\": {\n    \"latitude\": 6.35,\n    \"longitude\": 81.5,\n    \"source\": \"GPS\",\n    \"accuracyMeters\": 8\n  },\n  \"description\": \"Wire snare found beside a wildlife trail. No animal was trapped.\",\n  \"photoId\": \"{{mediaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /incidents/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/incidents/{{incidentId}}",
+            "description": "Owner ranger or manager in the incident park."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /incidents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/incidents",
+            "description": "Ranger sees own incidents; manager sees authorized parks. Dates filter detectedAt; provide both or neither, max 92 days. Page through the list for map points; do not truncate the map silently."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "PUT /alerts/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}",
+            "description": "Manager-only manual setup for the first milestone, not automatic collar detection. LocationUpdatedAt is the observation time, never the GET time. All park/area and time references are validated. Server sets NEW.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"animal\": \"Asian elephant\",\n  \"collarId\": \"ELE-017\",\n  \"riskLevel\": \"HIGH\",\n  \"location\": {\n    \"latitude\": 6.35,\n    \"longitude\": 81.5,\n    \"source\": \"GPS\",\n    \"accuracyMeters\": 8\n  },\n  \"locationUpdatedAt\": \"2026-10-07T13:13:00Z\",\n  \"detectedAt\": \"2026-10-07T13:12:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /alerts/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}",
+            "description": "Authorized park scope; preserve locationUpdatedAt. Do not label a stale observation Live."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts",
+            "description": "Park-scoped; officers see New alerts except their own declines, their own Responding alerts and eligible Resolved history. Managers can inspect all in their parks. Poll in foreground; not background delivery."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /alerts/{id}/accept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}/accept",
+            "description": "No body. Atomic conditional NEW-to-RESPONDING transition; authenticated officer must be eligible and not have declined. Same officer retry returns 200. Another owner or invalid state is 409."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /alerts/{id}/decline",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}/decline",
+            "description": "NEW alerts only, before acceptance. Leave alert NEW and record one decline per officer. Same reason retry returns 200; changed repeated decline or invalid state is 409. Automatic reassignment/escalation is deferred. Declines are limited to 100 distinct officers per alert.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Already responding to another incident.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /alerts/{id}/support",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}/support",
+            "description": "Assigned officer on RESPONDING alert only. Embed bounded support requests (max 20). Atomic deduplication by requestId: exact replay 200; changed requestId payload 409. REQUESTED means recorded, not delivered.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestId\": \"{{supportRequestId}}\",\n  \"reason\": \"Additional officers needed near the village boundary.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /alerts/{id}/response",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/alerts/{{alertId}}/response",
+            "description": "Assigned officer only. Atomically store response and set RESOLVED in one alert document. Any photos must be owned/park-scoped ALERT_RESPONSE media. Exact response retry returns 200; a changed final response or invalid state returns 409. Failed persistence leaves RESPONDING. Omitted or null photoIds are treated as an empty list; null list elements are invalid.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionTaken\": \"Guided the elephant away from the farmland.\",\n  \"result\": \"Animal returned towards the forest.\",\n  \"notes\": \"No injuries or property damage reported.\",\n  \"photoIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "GET /analytics/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/analytics/summary?parkId={{parkId}}&from={{from}}&to={{to}}",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "PUT /reports/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/reports/{{reportId}}",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"reportType\": \"MONTHLY_CONSERVATION\",\n  \"from\": \"2026-08-01\",\n  \"to\": \"2026-08-31\",\n  \"sections\": [\n    \"INCIDENT_STATISTICS\",\n    \"PATROL_COVERAGE\",\n    \"CONFLICT_SUMMARY\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /reports/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/reports/{{reportId}}",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Read the stored immutable snapshot, not current analytics."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/reports?parkId={{parkId}}",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Reports in authorized parks; snapshot omitted from list."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /reports/{id}/download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/reports/{{reportId}}/download",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "item": [
+        {
+          "name": "PUT /community-reports/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}",
+            "description": "Member has authorized park; server sets reporter and SUBMITTED. Require cropDetails for CROP_DAMAGE. Location coordinates may be omitted when only village/landmark is known. Any photo must be owned COMMUNITY_REPORT media in the same park. No SMS ingestion or automatic alert creation in this operation. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"type\": \"CROP_DAMAGE\",\n  \"species\": \"Elephant\",\n  \"village\": \"Village boundary Area B\",\n  \"occurredAt\": \"2026-10-07T13:00:00Z\",\n  \"description\": \"Elephants damaged the paddy field near the village.\",\n  \"cropDetails\": \"Paddy; damage near the northern edge of the field.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /community-reports/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}",
+            "description": "Community members: own reports only. Manager, ranger and liaison: assigned parks. Optional status=SUBMITTED|RESPONDING|RESOLVED; newest submission first."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /community-reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports",
+            "description": "Community members: own reports only. Manager, ranger and liaison: assigned parks. Optional status=SUBMITTED|RESPONDING|RESOLVED; newest submission first."
+          },
+          "response": []
+        },
+        {
+          "name": "NEW POST /community-reports/{id}/accept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}/accept",
+            "description": "Atomically claim a SUBMITTED report in an assigned park. Sets RESPONDING, assignedOfficerId and acceptedAt. An identical retry by the same officer returns 200. Another officer or a resolved report returns 409 COMMUNITY_REPORT_ALREADY_ASSIGNED."
+          },
+          "response": []
+        },
+        {
+          "name": "NEW PUT /community-reports/{id}/response",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}/response",
+            "description": "Only the officer who accepted the report may resolve it; another officer receives 403 REPORT_ASSIGNEE_REQUIRED. Sets RESOLVED, actionTaken, result, resolvedBy and resolvedAt. Identical retries return 200; an altered final response returns 409 COMMUNITY_RESPONSE_CONFLICT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionTaken\": \"Visited the village and guided the elephant away.\",\n  \"result\": \"Village boundary is clear.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cameras",
+      "item": [
+        {
+          "name": "GET /camera-traps",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/camera-traps?parkId={{parkId}}",
+            "description": "Seeded camera-trap metadata in authorized parks."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /camera-trap-images/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/camera-trap-images/{{cameraImageId}}",
+            "description": "Camera determines park/area; caller must be authorized. First upload camera media with PUT /media/cccccccc-cccc-4ccc-8ccc-cccccccccccc and multipart category=CAMERA_TRAP, parkId=park-yala as the researcher/manager. Media must belong to caller, share park and have CAMERA_TRAP category. Store capture time separately from upload time. Server sets PENDING_REVIEW. Sensor ingestion is deferred.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cameraTrapId\": \"{{cameraTrapId}}\",\n  \"mediaId\": \"cccccccc-cccc-4ccc-8ccc-cccccccccccc\",\n  \"capturedAt\": \"2026-10-07T00:50:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /camera-trap-images/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/camera-trap-images/{{cameraImageId}}",
+            "description": "Authorized park scope; review is absent before review."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /camera-trap-images",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/camera-trap-images?parkId={{parkId}}",
+            "description": "Authorized-park images, newest capture first. Image bytes downloaded separately."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /camera-trap-images/{id}/review",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/camera-trap-images/{{cameraImageId}}/review",
+            "description": "Atomic first review stores reviewer/time and sets REVIEWED. Species may be Unknown. possiblePoacher is a requires-verification flag, not a proven identity. Same reviewer/payload retry returns 200; another or different review is 409. No automated species/confidence prediction.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"species\": \"Asian elephant\",\n  \"possiblePoacher\": false,\n  \"notes\": \"One elephant visible near the trail.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "NEW — account onboarding (1.2.0)",
+      "description": "Community: register -> login. Staff: manager login using the existing request -> create staff -> staff login with temporary password -> change password -> staff login with new password. Required passwords are 6-72 Unicode code points and <=72 UTF-8 bytes.",
+      "item": [
+        {
+          "name": "NEW: Register community member",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Community Member\",\n  \"email\": \"{{communityEmail}}\",\n  \"password\": \"{{communityPassword}}\",\n  \"parkId\": \"{{parkId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login registered community member",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{communityEmail}}\",\n  \"password\": \"{{communityPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NEW: Create staff account (manager token)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Ranger\",\n  \"email\": \"{{staffEmail}}\",\n  \"temporaryPassword\": \"{{temporaryPassword}}\",\n  \"role\": \"RANGER\",\n  \"parkIds\": [\n    \"{{parkId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"staffUserId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff login with temporary password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{temporaryPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NEW: Change own password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/change-password",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{temporaryPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", \"\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff login after password change",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Successful response\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Success envelope\", () => pm.expect(pm.response.json().status).to.eql(\"00\"));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Registration parks and manager setup",
+      "item": [
+        {
+          "name": "NEW GET /auth/registration-parks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/auth/registration-parks",
+            "description": "Public catalog of existing parks enabled by COMMUNITY_REGISTRATION_PARK_IDS. Returns only IDs and names. An empty array means no parks are available for community registration."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /parks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/parks",
+            "description": "Manager only. Creates and assigns a park.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"park-new\",\n  \"name\": \"New Conservation Park\",\n  \"timezone\": \"Asia/Colombo\",\n  \"areas\": [\n    {\n      \"id\": \"area-new\",\n      \"name\": \"Northern boundary\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /patrol-routes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/patrol-routes",
+            "description": "Manager only. Creates a route in an assigned park.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"name\": \"Village boundary patrol\",\n  \"plannedDistanceMeters\": 1000,\n  \"pathPoints\": [\n    {\n      \"latitude\": 6.35,\n      \"longitude\": 81.5\n    },\n    {\n      \"latitude\": 6.36,\n      \"longitude\": 81.51\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
