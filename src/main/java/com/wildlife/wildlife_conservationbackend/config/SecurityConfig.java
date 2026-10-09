@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.LOGIN).permitAll()
                         .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.REGISTER).permitAll()
+                        .requestMatchers(HttpMethod.GET, EndPoint.BASE + EndPoint.REGISTRATION_PARKS).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, EndPoint.BASE + EndPoint.CHANGE_PASSWORD).authenticated()
                         .requestMatchers(HttpMethod.GET, EndPoint.BASE + EndPoint.PROFILE).authenticated()

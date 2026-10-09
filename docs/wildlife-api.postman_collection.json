@@ -2,7 +2,7 @@
   "info": {
     "name": "Wildlife conservation — implemented APIs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "All 39 implemented APIs. NEW account onboarding folder includes community registration, staff creation, and password change. Set the separate communityPassword, temporaryPassword, newPassword variables. Staff must change the temporary password then log in again; password change clears the stored token. Other requests use baseUrl and the stored token; select an image file for uploads."
+    "description": "All 44 implemented APIs. Community officers can accept and resolve reports. Researchers can use analytics and report APIs. Public registration parks and manager park/route creation are included. NEW account onboarding folder includes community registration, staff creation, and password change. Set the separate communityPassword, temporaryPassword, newPassword variables. Staff must change the temporary password then log in again; password change clears the stored token. Other requests use baseUrl and the stored token; select an image file for uploads."
   },
   "variable": [
     {
@@ -1011,7 +1011,7 @@
               ]
             },
             "url": "{{baseUrl}}/analytics/summary?parkId={{parkId}}&from={{from}}&to={{to}}",
-            "description": "Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503."
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Inclusive park-local dates, at most 92 days. Aggregate stored incidents, completed patrols, community reports and resolved alerts. Potential hotspot threshold: 3 incidents per area. Route coverage denominator is unique routes with assignments scheduled to start in the period; numerator is those routes with an assignment patrol completed in the period. This is not geographic area coverage. No assignments => coveragePercent=null. No data => dataAvailable=false, 200; database failure =>503."
           },
           "response": []
         }
@@ -1041,7 +1041,7 @@
               ]
             },
             "url": "{{baseUrl}}/reports/{{reportId}}",
-            "description": "Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download.",
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Compute bounded analytics and store an immutable snapshot synchronously, max 92 days. Identical UUID/request returns original snapshot even if source data changed. Creation is also Save; no second save operation. PDF is generated from this snapshot on download.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"reportType\": \"MONTHLY_CONSERVATION\",\n  \"from\": \"2026-08-01\",\n  \"to\": \"2026-08-31\",\n  \"sections\": [\n    \"INCIDENT_STATISTICS\",\n    \"PATROL_COVERAGE\",\n    \"CONFLICT_SUMMARY\"\n  ]\n}",
@@ -1070,7 +1070,7 @@
               ]
             },
             "url": "{{baseUrl}}/reports/{{reportId}}",
-            "description": "Read the stored immutable snapshot, not current analytics."
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Read the stored immutable snapshot, not current analytics."
           },
           "response": []
         },
@@ -1090,7 +1090,7 @@
               ]
             },
             "url": "{{baseUrl}}/reports?parkId={{parkId}}",
-            "description": "Reports in authorized parks; snapshot omitted from list."
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Reports in authorized parks; snapshot omitted from list."
           },
           "response": []
         },
@@ -1110,7 +1110,7 @@
               ]
             },
             "url": "{{baseUrl}}/reports/{{reportId}}/download",
-            "description": "Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement."
+            "description": "PARK_MANAGER and RESEARCHER within assigned parks. Generate a small PDF from the stored snapshot. Return Content-Disposition attachment; retain snapshot after download failure. First PDF uses summary tables; maps are a later enhancement."
           },
           "response": []
         }
@@ -1169,7 +1169,7 @@
               ]
             },
             "url": "{{baseUrl}}/community-reports/{{communityReportId}}",
-            "description": "Owner member or authorized park manager/liaison only. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional."
+            "description": "Community members: own reports only. Manager, ranger and liaison: assigned parks. Optional status=SUBMITTED|RESPONDING|RESOLVED; newest submission first."
           },
           "response": []
         },
@@ -1189,7 +1189,61 @@
               ]
             },
             "url": "{{baseUrl}}/community-reports",
-            "description": "Member sees own records only; manager/liaison sees their parks. Dates filter occurredAt, both or neither, maximum 92 days. Wildlife sightings require species; crop damage requires cropDetails. Location and photos are optional."
+            "description": "Community members: own reports only. Manager, ranger and liaison: assigned parks. Optional status=SUBMITTED|RESPONDING|RESOLVED; newest submission first."
+          },
+          "response": []
+        },
+        {
+          "name": "NEW POST /community-reports/{id}/accept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}/accept",
+            "description": "Atomically claim a SUBMITTED report in an assigned park. Sets RESPONDING, assignedOfficerId and acceptedAt. An identical retry by the same officer returns 200. Another officer or a resolved report returns 409 COMMUNITY_REPORT_ALREADY_ASSIGNED."
+          },
+          "response": []
+        },
+        {
+          "name": "NEW PUT /community-reports/{id}/response",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/community-reports/{{communityReportId}}/response",
+            "description": "Only the officer who accepted the report may resolve it; another officer receives 403 REPORT_ASSIGNEE_REQUIRED. Sets RESOLVED, actionTaken, result, resolvedBy and resolvedAt. Identical retries return 200; an altered final response returns 409 COMMUNITY_RESPONSE_CONFLICT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionTaken\": \"Visited the village and guided the elephant away.\",\n  \"result\": \"Village boundary is clear.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         }
@@ -1576,6 +1630,92 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Registration parks and manager setup",
+      "item": [
+        {
+          "name": "NEW GET /auth/registration-parks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/auth/registration-parks",
+            "description": "Public catalog of existing parks enabled by COMMUNITY_REGISTRATION_PARK_IDS. Returns only IDs and names. An empty array means no parks are available for community registration."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /parks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/parks",
+            "description": "Manager only. Creates and assigns a park.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"park-new\",\n  \"name\": \"New Conservation Park\",\n  \"timezone\": \"Asia/Colombo\",\n  \"areas\": [\n    {\n      \"id\": \"area-new\",\n      \"name\": \"Northern boundary\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /patrol-routes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/patrol-routes",
+            "description": "Manager only. Creates a route in an assigned park.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parkId\": \"{{parkId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"name\": \"Village boundary patrol\",\n  \"plannedDistanceMeters\": 1000,\n  \"pathPoints\": [\n    {\n      \"latitude\": 6.35,\n      \"longitude\": 81.5\n    },\n    {\n      \"latitude\": 6.36,\n      \"longitude\": 81.51\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
         }
       ]
     }

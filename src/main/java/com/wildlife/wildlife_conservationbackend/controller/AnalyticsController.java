@@ -24,7 +24,7 @@ public class AnalyticsController {
     private final AnalyticsService service;
 
     @GetMapping(value = EndPoint.ANALYTICS, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RESEARCHER')")
     public ResponseEntity<StandardResponse<AnalyticsSummaryResponseDTO>> summary(
             @AuthenticationPrincipal CurrentUser actor,
             @Valid @ModelAttribute AnalyticsQuery query) {

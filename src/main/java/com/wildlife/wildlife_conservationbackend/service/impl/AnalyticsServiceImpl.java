@@ -3,6 +3,8 @@ package com.wildlife.wildlife_conservationbackend.service.impl;
 import com.wildlife.wildlife_conservationbackend.domain.AnalyticsFacts;
 import com.wildlife.wildlife_conservationbackend.domain.AnalyticsSnapshot;
 import com.wildlife.wildlife_conservationbackend.domain.AreaCount;
+import com.wildlife.wildlife_conservationbackend.domain.CommunityAreaCount;
+import com.wildlife.wildlife_conservationbackend.domain.CommunityConflictSummary;
 import com.wildlife.wildlife_conservationbackend.domain.CurrentUser;
 import com.wildlife.wildlife_conservationbackend.domain.DailyCount;
 import com.wildlife.wildlife_conservationbackend.domain.IncidentTypeCount;
@@ -69,8 +71,15 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         boolean available = totalIncidents > 0 || facts.getCommunityReportCount() > 0 || facts.getResolvedAlertCount() > 0
                 || facts.getCompletedPatrolCount() > 0 || facts.getAssignedRouteCount() > 0;
         log.debug("Analytics calculated parkId={} actorId={} dataAvailable={}", parkId, actor.getId(), available);
-        return new AnalyticsSnapshot(parkId, from, to, available, totalIncidents, types, days, areas, coverage,
+        AnalyticsSnapshot snapshot = new AnalyticsSnapshot(parkId, from, to, available, totalIncidents, types, days, areas, coverage,
                 facts.getCommunityReportCount(), facts.getResolvedAlertCount(), clock.instant());
+        List<DailyCount> communityDays = from.datesUntil(to.plusDays(1))
+                .map(date -> new DailyCount(date, facts.getDailyCommunityCounts().getOrDefault(date.toString(), 0L))).toList();
+        List<CommunityAreaCount> communityAreas = facts.getCommunityAreaCounts().entrySet().stream()
+                .map(entry -> new CommunityAreaCount(entry.getKey(), names.getOrDefault(entry.getKey(), "Unknown area"), entry.getValue()))
+                .sorted(Comparator.comparingLong(CommunityAreaCount::getReportCount).reversed().thenComparing(CommunityAreaCount::getAreaId)).toList();
+        snapshot.setCommunityConflict(new CommunityConflictSummary(facts.getCommunityTypeCounts(), communityDays, communityAreas));
+        return snapshot;
     }
 
     private RouteCoverage coverage(AnalyticsFacts facts) {

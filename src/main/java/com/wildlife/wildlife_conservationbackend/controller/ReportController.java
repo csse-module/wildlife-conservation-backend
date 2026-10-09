@@ -35,7 +35,7 @@ public class ReportController {
     private final ReportMapper mapper;
 
     @PutMapping(value = EndPoint.REPORTS + "/{id}", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RESEARCHER')")
     public ResponseEntity<StandardResponse<ReportDetailResponseDTO>> generate(
             @AuthenticationPrincipal CurrentUser actor,
             @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id,
@@ -44,7 +44,7 @@ public class ReportController {
     }
 
     @GetMapping(value = EndPoint.REPORTS, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RESEARCHER')")
     public ResponseEntity<StandardResponse<PageResponse<ReportSummaryResponseDTO>>> list(
             @AuthenticationPrincipal CurrentUser actor,
             @Valid @ModelAttribute ParkQuery query,
@@ -53,7 +53,7 @@ public class ReportController {
     }
 
     @GetMapping(value = EndPoint.REPORTS + "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RESEARCHER')")
     public ResponseEntity<StandardResponse<ReportDetailResponseDTO>> get(
             @AuthenticationPrincipal CurrentUser actor,
             @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id) {
@@ -61,7 +61,7 @@ public class ReportController {
     }
 
     @GetMapping(value = EndPoint.REPORTS + "/{id}/download")
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RESEARCHER')")
     public ResponseEntity<byte[]> download(
             @AuthenticationPrincipal CurrentUser actor,
             @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id) {

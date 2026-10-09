@@ -1,19 +1,22 @@
 # Implemented APIs
 
-Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one. An optional `X-B3-TraceId` (preferred) or `X-Trace-ID` accepts a nonzero 16- or 32-digit hexadecimal trace ID; missing or invalid values are generated. Responses include `X-Request-ID` and `X-Trace-ID`, matching the request's log prefix.
+Base URL: `http://localhost:8080/api/v1`. The backend implements 44 operations. Send `Authorization: Bearer <accessToken>` after login. JSON POST/PUT requests use `Content-Type: application/json`; image uploads use `multipart/form-data`. Image/PDF downloads return binary content. An optional `X-Request-ID` containing 1–64 letters, digits or hyphens is accepted; otherwise the server generates one. An optional `X-B3-TraceId` (preferred) or `X-Trace-ID` accepts a nonzero 16- or 32-digit hexadecimal trace ID; missing or invalid values are generated. Responses include `X-Request-ID` and `X-Trace-ID`, matching the request's log prefix.
 
 ## Roles and flows
 
 | Method | Path | Allowed roles |
 | --- | --- | --- |
 | POST | `/auth/login` | Public |
-| POST | `/auth/register` **NEW** | Public; creates COMMUNITY_MEMBER |
+| POST | `/auth/register` | Public; creates COMMUNITY_MEMBER |
+| GET | `/auth/registration-parks` **NEW** | Public; enabled park IDs/names |
 | POST | `/auth/change-password` **NEW** | All five roles |
 | GET | `/auth/me` | All five roles |
 | GET | `/parks` | All five roles |
+| POST | `/parks` | PARK_MANAGER |
 | GET | `/users` | PARK_MANAGER |
 | POST | `/users` **NEW** | PARK_MANAGER; creates staff |
 | GET | `/patrol-routes` | PARK_MANAGER, RANGER |
+| POST | `/patrol-routes` | PARK_MANAGER |
 | GET | `/patrol-routes/{id}` | PARK_MANAGER, RANGER |
 | PUT | `/patrol-assignments/{id}` | PARK_MANAGER |
 | GET | `/patrol-assignments` | PARK_MANAGER, RANGER |
@@ -32,14 +35,16 @@ Base URL: `http://localhost:8080/api/v1`. The backend implements 39 operations. 
 | POST | `/alerts/{id}/decline` | RANGER, LIAISON_OFFICER |
 | POST | `/alerts/{id}/support` | RANGER, LIAISON_OFFICER |
 | PUT | `/alerts/{id}/response` | RANGER, LIAISON_OFFICER |
-| GET | `/analytics/summary` | PARK_MANAGER |
-| PUT | `/reports/{id}` | PARK_MANAGER |
-| GET | `/reports` | PARK_MANAGER |
-| GET | `/reports/{id}` | PARK_MANAGER |
-| GET | `/reports/{id}/download` | PARK_MANAGER |
+| GET | `/analytics/summary` | PARK_MANAGER, RESEARCHER |
+| PUT | `/reports/{id}` | PARK_MANAGER, RESEARCHER |
+| GET | `/reports` | PARK_MANAGER, RESEARCHER |
+| GET | `/reports/{id}` | PARK_MANAGER, RESEARCHER |
+| GET | `/reports/{id}/download` | PARK_MANAGER, RESEARCHER |
 | PUT | `/community-reports/{id}` | COMMUNITY_MEMBER |
-| GET | `/community-reports` | COMMUNITY_MEMBER, PARK_MANAGER, LIAISON_OFFICER |
-| GET | `/community-reports/{id}` | COMMUNITY_MEMBER, PARK_MANAGER, LIAISON_OFFICER |
+| GET | `/community-reports` | COMMUNITY_MEMBER, PARK_MANAGER, RANGER, LIAISON_OFFICER |
+| GET | `/community-reports/{id}` | COMMUNITY_MEMBER, PARK_MANAGER, RANGER, LIAISON_OFFICER |
+| POST | `/community-reports/{id}/accept` **NEW** | RANGER, LIAISON_OFFICER |
+| PUT | `/community-reports/{id}/response` **NEW** | RANGER, LIAISON_OFFICER |
 | GET | `/camera-traps` | PARK_MANAGER, RESEARCHER |
 | PUT | `/camera-trap-images/{id}` | PARK_MANAGER, RESEARCHER |
 | GET | `/camera-trap-images` | PARK_MANAGER, RESEARCHER |
@@ -110,7 +115,7 @@ Email lookup is case insensitive. Passwords are BCrypt hashes in MongoDB. Login 
 
 ## Newly added account APIs — version 1.2.0
 
-Added on 8 October 2026: public community registration, manager-created staff, and password change. The backend now has **39 operations**. These APIs use the same DTO → mapper → domain request → feature service → repository → response-generator structure.
+Added on 8 October 2026: public community registration, manager-created staff, and password change. The backend now has **44 operations**. These APIs use the same DTO → mapper → domain request → feature service → repository → response-generator structure.
 
 ### Community registration — NEW
 
@@ -314,7 +319,7 @@ List filters are optional `parkId`, `status`, `page`, `size`. Officers see non-d
 
 ## Analytics and reports
 
-`GET /analytics/summary?parkId=park-yala&from=2026-10-01&to=2026-10-07` requires all three parameters. Dates are inclusive park-local dates, at most 92 days. Response includes type/daily/area incident counts, community report count, resolved alert count, and route coverage. Daily series includes zero-count dates. Areas with at least three incidents are potential hotspots.
+`GET /analytics/summary?parkId=park-yala&from=2026-10-01&to=2026-10-07` requires all three parameters. Dates are inclusive park-local dates, at most 92 days. Managers and researchers can access this API. Response includes type/daily/area incident counts, community report count, resolved alert count, route coverage, and `communityConflict` with report types, daily counts and area counts. Daily series includes zero-count dates. Areas with at least three incidents are potential hotspots.
 
 Coverage basis is `ASSIGNED_ROUTES_COMPLETED`: unique routes with assignments starting in the period are the denominator; those routes with a linked patrol ending in that period are the numerator. No assignments gives `coveragePercent=null`. This measures route completion. No stored activity gives `dataAvailable=false`; database failures return 503.
 
@@ -325,12 +330,70 @@ Coverage basis is `ASSIGNED_ROUTES_COMPLETED`: unique routes with assignments st
  "sections":["INCIDENT_STATISTICS","INCIDENT_TRENDS","HOTSPOT_SUMMARY","PATROL_COVERAGE","CONFLICT_SUMMARY"]}
 ```
 
-Types: `MONTHLY_CONSERVATION`, `INCIDENTS`, `PATROL_COVERAGE`, `CONFLICTS`. Choose one to five distinct sections. Creation saves a complete immutable analytics snapshot and returns metadata plus `snapshot`, `status=GENERATED`, `generatedBy`, `generatedAt`, `downloadUrl`. Identical retry returns the original snapshot without recalculating it. `GET /reports?parkId=...` returns paged metadata; GET details includes the snapshot. `GET /reports/{id}/download` returns `application/pdf` with an attachment filename. Managers read reports in their parks. PDFs include only the selected sections and are generated from the saved snapshot.
+Types: `MONTHLY_CONSERVATION`, `INCIDENTS`, `PATROL_COVERAGE`, `CONFLICTS`. Choose one to five distinct sections. Creation saves a complete immutable analytics snapshot and returns metadata plus `snapshot`, `status=GENERATED`, `generatedBy`, `generatedAt`, `downloadUrl`. Identical retry returns the original snapshot without recalculating it. `GET /reports?parkId=...` returns paged metadata; GET details includes the snapshot. `GET /reports/{id}/download` returns `application/pdf` with an attachment filename. Managers and researchers read reports in their parks. PDFs include only the selected sections and are generated from the saved snapshot.
 
 ## Community and camera flows
 
-Member `PUT /community-reports/{uuid}` requires `parkId`, `areaId`, `type=WILDLIFE_SIGHTING|CROP_DAMAGE`, `village`, `occurredAt`, `description`. Sightings also require `species`; crop damage requires `cropDetails`. Location and an owned `COMMUNITY_REPORT` photo are optional. Response adds `id`, `reportedBy`, `status=SUBMITTED`, `createdAt`. Members read their own reports; managers/liaison officers read their parks. List filters match incidents, with dates filtering `occurredAt`. These endpoints implement app reporting; SMS ingestion remains external integration work.
+Member `PUT /community-reports/{uuid}` requires `parkId`, `areaId`, `type=WILDLIFE_SIGHTING|CROP_DAMAGE`, `village`, `occurredAt`, `description`. Sightings also require `species`; crop damage requires `cropDetails`. Location and an owned `COMMUNITY_REPORT` photo are optional. Response adds `id`, `reportedBy`, `status=SUBMITTED`, `createdAt`. Members read their own reports; managers/rangers/liaison officers read their parks. Lists sort by submission time (`createdAt` descending), including reports delivered after an offline delay; optional `status` filters SUBMITTED, RESPONDING or RESOLVED. List filters match incidents, with dates filtering `occurredAt`. These endpoints implement app reporting; SMS ingestion remains external integration work.
 
 Manager/researcher flow: `GET /camera-traps?parkId=...` → upload a `CAMERA_TRAP` image → `PUT /camera-trap-images/{uuid}` with `{"cameraTrapId":"CT-DEMO","mediaId":"33333333-3333-4333-8333-333333333333","capturedAt":"2026-10-07T04:00:00Z"}`. The service validates trap access and image ownership/category, then sets `PENDING_REVIEW`. List requires `parkId`, with optional `cameraTrapId`, `status`, and pagination.
 
 `PUT /camera-trap-images/{id}/review` accepts `{"species":"Elephant","possiblePoacher":false,"notes":"Clear image."}`. Species and the boolean are required; notes are optional. Review atomically sets `REVIEWED` and records reviewer/time. Exact retries by that reviewer return the existing record; changed reviews or a second reviewer return 409. `possiblePoacher=true` is a verification flag. Reviews are manual and final in this milestone.
+
+## Case-study workflows — added in 1.3.0
+
+### Public registration park list
+
+`GET /auth/registration-parks` is public. It returns the normal success envelope with `data`:
+
+```json
+[{"id":"park-yala","name":"Yala National Park"}]
+```
+
+Only existing parks enabled in `COMMUNITY_REGISTRATION_PARK_IDS` appear. An empty list means the manager must configure a park before villagers can register. Public registration always creates COMMUNITY_MEMBER; managers create ranger, liaison and researcher accounts with one or more assigned parks.
+
+### Community response
+
+Villager flow: register → login → select park/area → sighting or crop-damage report → submit → view own status/outcome. Flutter stores an immutable draft and attachment ID before delivery. Pending reports are visible on that device until synchronization succeeds. Retries use the same IDs.
+
+Manager flow: login as PARK_MANAGER → choose park → incoming community reports → open details. The Flutter dashboard refreshes every 30 seconds while open, on resume, and manually. A submitted report does not automatically create a collar alert.
+
+Officer flow: login as RANGER or LIAISON_OFFICER → community inbox → accept → record response → resolve.
+
+`POST /community-reports/{id}/accept` has no body. HTTP 200 response `data` includes:
+
+```json
+{"id":"88888888-8888-4888-8888-888888888888","status":"RESPONDING","assignedOfficerId":"usr-liaison","acceptedAt":"2026-10-09T10:00:00Z"}
+```
+
+Other original report fields are also returned. Acceptance is atomic. An identical retry by the same officer returns 200; another claimant or a resolved report returns `409 COMMUNITY_REPORT_ALREADY_ASSIGNED`.
+
+`PUT /community-reports/{id}/response` request:
+
+```json
+{"actionTaken":"Visited the village and guided the elephant away.","result":"Village boundary is clear."}
+```
+
+Both fields are required; maximum lengths are 1,000 and 500 characters. HTTP 200 response includes the original report plus:
+
+```json
+{"status":"RESOLVED","assignedOfficerId":"usr-liaison","actionTaken":"Visited the village and guided the elephant away.","result":"Village boundary is clear.","resolvedBy":"usr-liaison","resolvedAt":"2026-10-09T10:30:00Z"}
+```
+
+Only the accepting officer can resolve it (`403 REPORT_ASSIGNEE_REQUIRED` otherwise). The final response is immutable; identical retries return 200 and changed final responses return `409 COMMUNITY_RESPONSE_CONFLICT`. Villagers see outcomes only for their own reports. Legacy records without a status read as SUBMITTED.
+
+### Community statistics and researcher reports
+
+`GET /analytics/summary` and saved report snapshots now include:
+
+```json
+{"communityConflict":{"typeCounts":{"WILDLIFE_SIGHTING":4,"CROP_DAMAGE":2},"dailyCounts":[{"date":"2026-10-09","count":6}],"areaCounts":[{"areaId":"area-b1","areaName":"Block 1","reportCount":6}]}}
+```
+
+The series covers every date in the requested period, including zero counts. Counts use the observation time and the park timezone. `CONFLICT_SUMMARY` PDFs include community types, locations and daily trends. RESEARCHER has access to analytics, report generation/list/details/PDF, and camera review within assigned parks; it does not have access to the raw community inbox or officer response APIs.
+
+### Existing park and route creation
+
+`POST /parks` (PARK_MANAGER) accepts `id`, `name`, `timezone`, and a nonempty `areas` list of `{id,name}`. The new park is assigned to the creating manager. `POST /patrol-routes` (PARK_MANAGER) accepts `parkId`, `areaId`, `name`, `plannedDistanceMeters`, and `pathPoints` of `{latitude,longitude}`. Supply the park and area explicitly. The Flutter assignment screen chooses an existing route and a ranger in the same park, then calls the existing immutable assignment PUT API.
+
+See [case-study-demo.md](case-study-demo.md) for startup and an end-to-end demonstration.

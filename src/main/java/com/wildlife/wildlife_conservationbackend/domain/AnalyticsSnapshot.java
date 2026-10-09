@@ -34,4 +34,24 @@ public class AnalyticsSnapshot {
     private long resolvedAlertCount;
 
     private Instant generatedAt;
+
+    private CommunityConflictSummary communityConflict = new CommunityConflictSummary();
+
+    public AnalyticsSnapshot(String parkId, LocalDate from, LocalDate to, boolean dataAvailable, long totalIncidents,
+                             List<IncidentTypeCount> incidentTypeCounts, List<DailyCount> dailyIncidentCounts,
+                             List<AreaCount> areaCounts, RouteCoverage patrolCoverage, long communityReportCount,
+                             long resolvedAlertCount, Instant generatedAt) {
+        this.parkId = parkId;
+        this.from = from;
+        this.to = to;
+        this.dataAvailable = dataAvailable;
+        this.totalIncidents = totalIncidents;
+        this.incidentTypeCounts = incidentTypeCounts;
+        this.dailyIncidentCounts = dailyIncidentCounts;
+        this.areaCounts = areaCounts;
+        this.patrolCoverage = patrolCoverage;
+        this.communityReportCount = communityReportCount;
+        this.resolvedAlertCount = resolvedAlertCount;
+        this.generatedAt = generatedAt;
+    }
 }

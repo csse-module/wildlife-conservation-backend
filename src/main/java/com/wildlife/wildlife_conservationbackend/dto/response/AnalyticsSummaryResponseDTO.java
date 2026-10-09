@@ -1,6 +1,7 @@
 package com.wildlife.wildlife_conservationbackend.dto.response;
 
 import com.wildlife.wildlife_conservationbackend.domain.AreaCount;
+import com.wildlife.wildlife_conservationbackend.domain.CommunityConflictSummary;
 import com.wildlife.wildlife_conservationbackend.domain.DailyCount;
 import com.wildlife.wildlife_conservationbackend.domain.IncidentTypeCount;
 import com.wildlife.wildlife_conservationbackend.domain.RouteCoverage;
@@ -38,4 +39,6 @@ public class AnalyticsSummaryResponseDTO {
     private long resolvedAlertCount;
 
     private Instant generatedAt;
+
+    private CommunityConflictSummary communityConflict;
 }

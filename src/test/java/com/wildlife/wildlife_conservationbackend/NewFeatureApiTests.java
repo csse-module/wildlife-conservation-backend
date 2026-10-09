@@ -65,6 +65,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -102,6 +104,7 @@ class NewFeatureApiTests {
     @MockitoBean private MediaStorage storage;
     @MockitoBean private IncidentRepository incidents;
     @MockitoBean private CommunityReportRepository community;
+    @MockitoBean private com.wildlife.wildlife_conservationbackend.repository.CommunityReportTransitionRepository communityTransitions;
     @MockitoBean private AlertRepository alerts;
     @MockitoBean private AlertTransitionRepository alertTransitions;
     @MockitoBean private CameraTrapRepository cameras;
@@ -199,6 +202,76 @@ class NewFeatureApiTests {
         return "Bearer " + tokens.issue(user);
     }
 
+    @Test
+    void villagerReportAppearsInManagerInboxAndOfficerOutcomeIsVisibleToVillager() throws Exception {
+        var report = CommunityReportEntity.builder().id(ID).parkId("park").areaId("area")
+                .type(com.wildlife.wildlife_conservationbackend.enums.CommunityReportType.CROP_DAMAGE)
+                .village("Village").description("Paddy damaged").cropDetails("Paddy")
+                .reportedBy(Role.COMMUNITY_MEMBER.name()).occurredAt(Instant.parse("2026-10-07T01:00:00Z")).build();
+        when(community.findById(ID)).thenReturn(Optional.of(report));
+        when(reader.find(any(Criteria.class), any(PageRequest.class), eq(CommunityReportEntity.class)))
+                .thenReturn(new PageImpl<>(List.of(report)));
+        mvc.perform(get("/api/v1/community-reports?parkId=park").header("Authorization", authenticate(Role.PARK_MANAGER)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].village").value("Village"))
+                .andExpect(jsonPath("$.data.items[0].status").value("SUBMITTED"));
+        when(communityTransitions.accept(eq(ID), eq("park"), eq(Role.LIAISON_OFFICER.name()), any(Instant.class)))
+                .thenAnswer(call -> {
+                    report.setStatus(com.wildlife.wildlife_conservationbackend.enums.CommunityReportStatus.RESPONDING);
+                    report.setAssignedOfficerId(Role.LIAISON_OFFICER.name());
+                    return report;
+                });
+        mvc.perform(post("/api/v1/community-reports/" + ID + "/accept").header("Authorization", authenticate(Role.LIAISON_OFFICER)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("RESPONDING"));
+        mvc.perform(put("/api/v1/community-reports/" + ID + "/response").header("Authorization", authenticate(Role.RANGER))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"actionTaken\":\"Visited village\",\"result\":\"Elephant moved away\"}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error.errorCode").value("REPORT_ASSIGNEE_REQUIRED"));
+        when(communityTransitions.resolve(eq(ID), eq("park"), eq(Role.LIAISON_OFFICER.name()), any(), any(Instant.class)))
+                .thenAnswer(call -> {
+                    report.setStatus(com.wildlife.wildlife_conservationbackend.enums.CommunityReportStatus.RESOLVED);
+                    report.setActionTaken("Visited village"); report.setResult("Elephant moved away");
+                    report.setResolvedBy(Role.LIAISON_OFFICER.name()); report.setResolvedAt(Instant.now());
+                    return report;
+                });
+        String payload = "{\"actionTaken\":\"Visited village\",\"result\":\"Elephant moved away\"}";
+        for (int retry = 0; retry < 2; retry++) {
+            mvc.perform(put("/api/v1/community-reports/" + ID + "/response").header("Authorization", authenticate(Role.LIAISON_OFFICER))
+                    .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.status").value("RESOLVED"));
+        }
+        verify(communityTransitions, times(1)).resolve(eq(ID), eq("park"), eq(Role.LIAISON_OFFICER.name()), any(), any(Instant.class));
+        mvc.perform(get("/api/v1/community-reports/" + ID).header("Authorization", authenticate(Role.COMMUNITY_MEMBER)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.result").value("Elephant moved away"));
+    }
+
+    @Test
+    void communityReportClaimCannotBeStolenAndOtherVillagersCannotReadIt() throws Exception {
+        var report = CommunityReportEntity.builder().id(ID).parkId("park").reportedBy("another-villager")
+                .status(com.wildlife.wildlife_conservationbackend.enums.CommunityReportStatus.RESPONDING)
+                .assignedOfficerId(Role.LIAISON_OFFICER.name()).build();
+        when(community.findById(ID)).thenReturn(Optional.of(report));
+        mvc.perform(post("/api/v1/community-reports/" + ID + "/accept").header("Authorization", authenticate(Role.RANGER)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.error.errorCode").value("COMMUNITY_REPORT_ALREADY_ASSIGNED"));
+        mvc.perform(get("/api/v1/community-reports/" + ID).header("Authorization", authenticate(Role.COMMUNITY_MEMBER)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void researcherCanGenerateReadAndDownloadReportButCannotManageCommunityResponses() throws Exception {
+        String authorization = authenticate(Role.RESEARCHER);
+        var generated = mvc.perform(put("/api/v1/reports/" + ID).header("Authorization", authorization)
+                .contentType(MediaType.APPLICATION_JSON).content(REPORT)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.snapshot.communityConflict.dailyCounts").isArray()).andReturn();
+        assertThat(generated.getResponse().getContentAsString()).contains("PATROL_COVERAGE");
+        var captor = org.mockito.ArgumentCaptor.forClass(ReportEntity.class);
+        verify(reports).insert(captor.capture());
+        when(reports.findById(ID)).thenReturn(Optional.of(captor.getValue()));
+        mvc.perform(get("/api/v1/reports/" + ID).header("Authorization", authorization)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/reports/" + ID + "/download").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(post("/api/v1/community-reports/" + ID + "/accept").header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+    }
+
     private AbstractMockHttpServletRequestBuilder<?> request(String method, String path, String payload, Role role) {
         String url = "/api/v1" + path.replace("{id}", ID);
         if ("UPLOAD".equals(method)) {
@@ -242,14 +315,16 @@ class NewFeatureApiTests {
             Arguments.of("POST", "/alerts/{id}/decline", "{\"reason\":\"Unavailable\"}", "RANGER,LIAISON_OFFICER"),
             Arguments.of("POST", "/alerts/{id}/support", "{\"requestId\":\"" + PHOTO + "\",\"reason\":\"Need help\"}", "RANGER,LIAISON_OFFICER"),
             Arguments.of("PUT", "/alerts/{id}/response", "{\"actionTaken\":\"Guided away\",\"result\":\"Resolved\"}", "RANGER,LIAISON_OFFICER"),
-            Arguments.of("GET", "/analytics/summary?parkId=park&from=2026-10-01&to=2026-10-07", "", "PARK_MANAGER"),
-            Arguments.of("PUT", "/reports/{id}", REPORT, "PARK_MANAGER"),
-            Arguments.of("GET", "/reports?parkId=park", "", "PARK_MANAGER"),
-            Arguments.of("GET", "/reports/{id}", "", "PARK_MANAGER"),
-            Arguments.of("GET", "/reports/{id}/download", "", "PARK_MANAGER"),
+            Arguments.of("GET", "/analytics/summary?parkId=park&from=2026-10-01&to=2026-10-07", "", "PARK_MANAGER,RESEARCHER"),
+            Arguments.of("PUT", "/reports/{id}", REPORT, "PARK_MANAGER,RESEARCHER"),
+            Arguments.of("GET", "/reports?parkId=park", "", "PARK_MANAGER,RESEARCHER"),
+            Arguments.of("GET", "/reports/{id}", "", "PARK_MANAGER,RESEARCHER"),
+            Arguments.of("GET", "/reports/{id}/download", "", "PARK_MANAGER,RESEARCHER"),
             Arguments.of("PUT", "/community-reports/{id}", COMMUNITY, "COMMUNITY_MEMBER"),
-            Arguments.of("GET", "/community-reports", "", "COMMUNITY_MEMBER,PARK_MANAGER,LIAISON_OFFICER"),
-            Arguments.of("GET", "/community-reports/{id}", "", "COMMUNITY_MEMBER,PARK_MANAGER,LIAISON_OFFICER"),
+            Arguments.of("GET", "/community-reports", "", "COMMUNITY_MEMBER,PARK_MANAGER,LIAISON_OFFICER,RANGER"),
+            Arguments.of("GET", "/community-reports/{id}", "", "COMMUNITY_MEMBER,PARK_MANAGER,LIAISON_OFFICER,RANGER"),
+            Arguments.of("POST", "/community-reports/{id}/accept", "", "RANGER,LIAISON_OFFICER"),
+            Arguments.of("PUT", "/community-reports/{id}/response", "{\"actionTaken\":\"Visited village\",\"result\":\"Resolved\"}", "RANGER,LIAISON_OFFICER"),
             Arguments.of("GET", "/camera-traps?parkId=park", "", "PARK_MANAGER,RESEARCHER"),
             Arguments.of("PUT", "/camera-trap-images/{id}", CAMERA, "PARK_MANAGER,RESEARCHER"),
             Arguments.of("GET", "/camera-trap-images?parkId=park", "", "PARK_MANAGER,RESEARCHER"),

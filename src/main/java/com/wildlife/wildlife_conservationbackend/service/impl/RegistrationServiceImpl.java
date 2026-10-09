@@ -4,6 +4,9 @@ import com.wildlife.wildlife_conservationbackend.config.CommunityRegistrationPro
 import com.wildlife.wildlife_conservationbackend.domain.RegistrationRequest;
 import com.wildlife.wildlife_conservationbackend.dto.response.StandardResponse;
 import com.wildlife.wildlife_conservationbackend.dto.response.UserProfileResponseDTO;
+import com.wildlife.wildlife_conservationbackend.dto.response.RegistrationParkResponseDTO;
+import java.util.List;
+import java.util.Comparator;
 import com.wildlife.wildlife_conservationbackend.entity.UserEntity;
 import com.wildlife.wildlife_conservationbackend.enums.Role;
 import com.wildlife.wildlife_conservationbackend.exception.ApiException;
@@ -30,7 +33,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public ResponseEntity<StandardResponse<UserProfileResponseDTO>> register(RegistrationRequest request) {
-//        requireRegistrationPark(request.getParkId());
+        requireRegistrationPark(request.getParkId());
         UserEntity user = accountCreator.create(request.getName(), request.getEmail(), request.getPassword(),
                 Role.COMMUNITY_MEMBER, Set.of(request.getParkId()), false);
         log.info("Community account created userId={} parkId={}", user.getId(), request.getParkId());
@@ -45,5 +48,13 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (!parkRepository.existsById(parkId)) {
             throw ApiException.invalid("The selected registration park does not exist.");
         }
+    }
+
+    @Override
+    public ResponseEntity<StandardResponse<List<RegistrationParkResponseDTO>>> availableParks() {
+        List<RegistrationParkResponseDTO> parks = parkRepository.findAllById(properties.getCommunityParkIds()).stream()
+                .map(park -> new RegistrationParkResponseDTO(park.getId(), park.getName()))
+                .sorted(Comparator.comparing(RegistrationParkResponseDTO::getName)).toList();
+        return responseGenerator.generateSuccessResponse(parks, HttpStatus.OK);
     }
 }

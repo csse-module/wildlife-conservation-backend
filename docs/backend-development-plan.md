@@ -1,6 +1,6 @@
 # WildGuard: simple Spring Boot backend plan
 
-Original plan prepared 8 October 2026. All 36 original API operations plus three account-onboarding APIs are now implemented (39 total); see [implemented-api.md](implemented-api.md) and [implemented-openapi.json](implemented-openapi.json) for current contracts. This document preserves the original scope and integration tradeoffs. Automatic collars, external notifications/SMS, and AI classification remain future integrations.
+Original plan prepared 8 October 2026. The backend now implements 44 operations, including account onboarding, park/route creation, the public registration park list and community response; see [implemented-api.md](implemented-api.md) and [implemented-openapi.json](implemented-openapi.json) for current contracts. This document preserves the original scope and integration tradeoffs. Automatic collars, external notifications/SMS, and AI classification remain future integrations.
 
 ## 1. Decision: use the starter you already have
 

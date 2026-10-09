@@ -53,7 +53,7 @@ public class ParkServiceImpl implements ParkService {
         parkRepository.insert(entity);
         
         userRepository.findById(actor.getId()).ifPresent(user -> {
-            java.util.Set<String> newParkIds = new java.util.HashSet<>(user.getParkIds());
+            Set<String> newParkIds = new java.util.HashSet<>(user.getParkIds());
             newParkIds.add(entity.getId());
             user.setParkIds(newParkIds);
             userRepository.save(user);

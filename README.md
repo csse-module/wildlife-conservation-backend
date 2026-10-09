@@ -1,6 +1,6 @@
 # Wildlife conservation backend
 
-The backend implements **39 APIs** under `http://localhost:8080/api/v1`: authentication, parks/users, patrols, media, incidents, alerts, analytics/reports, community reporting, and camera monitoring.
+The backend implements **44 APIs** under `http://localhost:8080/api/v1`: authentication, parks/users, patrols, media, incidents, alerts, analytics/reports, community reporting, and camera monitoring.
 
 The read-only `cdb-merchant` soundbox registration API informed the organization: controller → validated request DTO → explicit mapper → domain request → service interface → service implementation → repository/entity → response DTO → response generator. Controllers validate and map inputs, then return the service response directly. Feature services perform lookups, business checks, persistence, DTO mapping, and response generation. Dependencies use constructor injection. Responses use the reference-style `status`, `description`, `data`, and `error` envelope, with meaningful HTTP error codes.
 
@@ -23,7 +23,7 @@ Services are grouped by feature, with one interface and implementation per featu
 | `AlertService` | Alert setup, acceptance, decline, support, and resolution | `AlertController` |
 | `AnalyticsService` | Date-scoped counts, hotspots, and route completion coverage | `AnalyticsController` |
 | `ReportService` | Saved analytics snapshots and PDF downloads | `ReportController` |
-| `CommunityReportService` | Community submissions and scoped reads | `CommunityReportController` |
+| `CommunityReportService` | Community submissions, scoped inboxes, atomic acceptance and resolution | `CommunityReportController` |
 | `CameraTrapService` | Camera lookup, image submission, and final manual review | `CameraTrapController` |
 
 `utility.ResponseGenerator` is a concrete Spring component following the merchant generator class pattern. Feature services call `generateSuccessResponse` and return a typed `ResponseEntity`; exception advice and security handlers call `generateErrorResponse`. The generator owns envelope construction, HTTP statuses, and creation `Location` headers. Its `SaveResult` overload returns 201 for creation and 200 for an identical retry. `PatrolServiceImpl` separates shared lookups, ranger eligibility, persistence, duplicate-write recovery, and access checks into named private helpers. `JwtTokenProvider`, `PatrolValidator`, and `PatrolDateFilter` are focused helpers in `utility`.
@@ -85,7 +85,7 @@ Community registration accepts only existing parks in `COMMUNITY_REGISTRATION_PA
 
 New staff accounts have `passwordChangeRequired=true`. Their JWT permits profile access and password change; other protected APIs return `403 PASSWORD_CHANGE_REQUIRED`. After changing a password, every existing token is revoked, and the user must log in again. Existing MongoDB accounts default to no required password change until explicitly provisioned as new staff. The first manager uses trusted setup; the development seed creates the demo manager.
 
-See the newly added account API section in the [API guide](docs/implemented-api.md) for complete requests, responses, errors, and Flutter flows. Both `openapi.json` and `implemented-openapi.json` now describe the current 39-operation contract.
+See the newly added account API section in the [API guide](docs/implemented-api.md) for complete requests, responses, errors, and Flutter flows. Both `openapi.json` and `implemented-openapi.json` now describe the current 44-operation contract.
 
 ## API usage and checks
 
@@ -113,3 +113,7 @@ Alert acceptance, decline, support, and resolution use conditional MongoDB updat
 Analytics uses inclusive park-local dates, up to 92 days. Coverage means unique assigned routes completed, with null coverage when there are no assigned routes. Report creation saves the complete analytics snapshot; PDF download renders that saved snapshot using PDFBox 3.0.8. The default PDF font supports Western text. Set `REPORT_FONT_PATH` to an available TrueType font when report content needs additional scripts.
 
 Alerts are created manually by a manager for this milestone. Automatic collars, background push delivery, SMS gateways, and AI camera classification remain integration work. Support status `REQUESTED` records a request; it does not indicate external delivery. The original planning documents remain in `docs`; use the implemented guide/specification for current contracts.
+
+## Case-study frontend integration
+
+Villagers register publicly and submit sightings or crop damage; managers see their parks’ incoming reports. Rangers and liaison officers accept and resolve reports, and villagers can track the outcome. Managers and researchers generate/download conservation PDFs. Researchers also review camera images. See [the demo and setup guide](docs/case-study-demo.md) for the complete flow and frontend configuration. The frontend uses the existing Spring Boot media API, with no Supabase setup required for these flows.

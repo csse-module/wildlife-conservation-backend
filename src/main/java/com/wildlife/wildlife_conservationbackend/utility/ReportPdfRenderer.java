@@ -85,6 +85,16 @@ public class ReportPdfRenderer {
                 case CONFLICT_SUMMARY -> {
                     lines.add("Community reports: " + snapshot.getCommunityReportCount());
                     lines.add("Resolved alerts: " + snapshot.getResolvedAlertCount());
+                    var conflict = snapshot.getCommunityConflict();
+                    if (conflict != null) {
+                        lines.add("Reports by type:");
+                        conflict.getTypeCounts().entrySet().stream().sorted(java.util.Map.Entry.comparingByKey())
+                                .forEach(row -> lines.add(row.getKey() + ": " + row.getValue()));
+                        lines.add("Conflict locations:");
+                        conflict.getAreaCounts().forEach(row -> lines.add(row.getAreaName() + " (" + row.getAreaId() + "): " + row.getReportCount()));
+                        lines.add("Daily conflict trend:");
+                        conflict.getDailyCounts().forEach(row -> lines.add(row.getDate() + ": " + row.getCount()));
+                    }
                 }
             }
         }

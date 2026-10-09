@@ -65,7 +65,7 @@ public class ReportServiceImpl implements ReportService {
         SaveResult<ReportDetailResponseDTO> result;
         try {
             result = new SaveResult<>(mapper.toResponse(repository.insert(report)), true);
-            log.info("Report snapshot generated reportId={} managerId={}", id, actor.getId());
+            log.info("Report snapshot generated reportId={} actorId={}", id, actor.getId());
         } catch (DuplicateKeyException exception) {
             result = retry(actor, find(actor, id), hash);
         }
@@ -88,7 +88,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     public ResponseEntity<byte[]> download(CurrentUser actor, String id) {
         byte[] bytes = pdfRenderer.render(find(actor, id));
-        log.debug("Report downloaded reportId={} managerId={}", id, actor.getId());
+        log.debug("Report downloaded reportId={} actorId={}", id, actor.getId());
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(bytes.length)
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename("report-" + id + ".pdf").build().toString())

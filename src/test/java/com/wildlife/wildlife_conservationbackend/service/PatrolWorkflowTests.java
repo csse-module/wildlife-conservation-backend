@@ -85,7 +85,7 @@ class PatrolWorkflowTests {
         Clock clock = Clock.fixed(END.plusSeconds(600), ZoneOffset.UTC);
         fingerprint = new RequestFingerprint(JsonMapper.builder().findAndAddModules().build());
         ResponseGenerator responseGenerator = new ResponseGenerator();
-        var parkService = new ParkServiceImpl(reader, new ParkMapper(), responseGenerator, parks);
+        var parkService = new ParkServiceImpl(reader, new ParkMapper(), responseGenerator, parks, users);
         patrolService = new PatrolServiceImpl(patrols, assignments, routes, users, assignmentQueries, patrolQueries,
                 reader, parkService, new PatrolMapper(), new PatrolAssignmentMapper(), new PatrolRouteMapper(),
                 new PatrolValidator(clock), new PatrolDistanceCalculator(), dates, fingerprint, clock, responseGenerator);

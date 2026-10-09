@@ -113,6 +113,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -164,7 +165,8 @@ class FeatureWorkflowTests {
         incidentService = new IncidentServiceImpl(incidents, new IncidentMapper(locationMapper), parks, ownedMedia,
                 pageReader, dates, observations, fingerprint, responses, clock, assignments);
         communityService = new CommunityReportServiceImpl(communityReports, new CommunityReportMapper(locationMapper), parks,
-                ownedMedia, pageReader, dates, observations, fingerprint, responses, clock);
+                ownedMedia, pageReader, dates, observations, fingerprint, responses, clock,
+                mock(com.wildlife.wildlife_conservationbackend.repository.CommunityReportTransitionRepository.class));
         alertService = new AlertServiceImpl(alerts, alertTransitions, new AlertMapper(locationMapper), parks, ownedMedia,
                 pageReader, observations, fingerprint, responses, clock);
         cameraService = new CameraTrapServiceImpl(images, cameras, imageTransitions, new CameraTrapMapper(), parks,

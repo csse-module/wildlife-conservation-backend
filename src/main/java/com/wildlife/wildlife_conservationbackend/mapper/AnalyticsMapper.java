@@ -10,6 +10,6 @@ public class AnalyticsMapper {
         return new AnalyticsSummaryResponseDTO(snapshot.getParkId(), snapshot.getFrom(), snapshot.getTo(),
                 snapshot.isDataAvailable(), snapshot.getTotalIncidents(), snapshot.getIncidentTypeCounts(),
                 snapshot.getDailyIncidentCounts(), snapshot.getAreaCounts(), snapshot.getPatrolCoverage(),
-                snapshot.getCommunityReportCount(), snapshot.getResolvedAlertCount(), snapshot.getGeneratedAt());
+                snapshot.getCommunityReportCount(), snapshot.getResolvedAlertCount(), snapshot.getGeneratedAt(), snapshot.getCommunityConflict());
     }
 }

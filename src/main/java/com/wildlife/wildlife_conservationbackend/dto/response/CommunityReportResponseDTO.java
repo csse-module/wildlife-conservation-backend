@@ -38,4 +38,11 @@ public class CommunityReportResponseDTO {
     private String status;
 
     private Instant createdAt;
+
+    private String assignedOfficerId;
+    private Instant acceptedAt;
+    private String actionTaken;
+    private String result;
+    private String resolvedBy;
+    private Instant resolvedAt;
 }

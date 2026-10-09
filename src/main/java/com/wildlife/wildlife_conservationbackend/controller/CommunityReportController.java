@@ -3,6 +3,7 @@ package com.wildlife.wildlife_conservationbackend.controller;
 import com.wildlife.wildlife_conservationbackend.domain.CurrentUser;
 import com.wildlife.wildlife_conservationbackend.dto.request.CommunityReportQuery;
 import com.wildlife.wildlife_conservationbackend.dto.request.CommunityReportRequestDTO;
+import com.wildlife.wildlife_conservationbackend.dto.request.CommunityResponseRequestDTO;
 import com.wildlife.wildlife_conservationbackend.dto.request.PageQuery;
 import com.wildlife.wildlife_conservationbackend.dto.response.CommunityReportResponseDTO;
 import com.wildlife.wildlife_conservationbackend.dto.response.PageResponse;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,7 +45,7 @@ public class CommunityReportController {
     }
 
     @GetMapping(value = EndPoint.COMMUNITY_REPORTS, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyRole('COMMUNITY_MEMBER', 'PARK_MANAGER', 'LIAISON_OFFICER')")
+    @PreAuthorize("hasAnyRole('COMMUNITY_MEMBER', 'PARK_MANAGER', 'LIAISON_OFFICER', 'RANGER')")
     public ResponseEntity<StandardResponse<PageResponse<CommunityReportResponseDTO>>> list(
             @AuthenticationPrincipal CurrentUser actor,
             @Valid @ModelAttribute CommunityReportQuery query,
@@ -52,10 +54,27 @@ public class CommunityReportController {
     }
 
     @GetMapping(value = EndPoint.COMMUNITY_REPORTS + "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyRole('COMMUNITY_MEMBER', 'PARK_MANAGER', 'LIAISON_OFFICER')")
+    @PreAuthorize("hasAnyRole('COMMUNITY_MEMBER', 'PARK_MANAGER', 'LIAISON_OFFICER', 'RANGER')")
     public ResponseEntity<StandardResponse<CommunityReportResponseDTO>> get(
             @AuthenticationPrincipal CurrentUser actor,
             @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id) {
         return service.get(actor, id);
+    }
+
+    @PostMapping(value = EndPoint.COMMUNITY_REPORTS + "/{id}/accept", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('RANGER', 'LIAISON_OFFICER')")
+    public ResponseEntity<StandardResponse<CommunityReportResponseDTO>> accept(
+            @AuthenticationPrincipal CurrentUser actor,
+            @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id) {
+        return service.accept(actor, id);
+    }
+
+    @PutMapping(value = EndPoint.COMMUNITY_REPORTS + "/{id}/response", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('RANGER', 'LIAISON_OFFICER')")
+    public ResponseEntity<StandardResponse<CommunityReportResponseDTO>> resolve(
+            @AuthenticationPrincipal CurrentUser actor,
+            @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id,
+            @Valid @RequestBody CommunityResponseRequestDTO request) {
+        return service.resolve(actor, id, mapper.toResponseRequest(request));
     }
 }

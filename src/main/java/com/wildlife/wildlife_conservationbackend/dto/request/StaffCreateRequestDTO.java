@@ -32,6 +32,7 @@ public class StaffCreateRequestDTO {
     @NotBlank
     @Pattern(regexp = "RANGER|LIAISON_OFFICER|RESEARCHER", message = "must be RANGER, LIAISON_OFFICER or RESEARCHER")
     private String role;
-    @Size(max = 20)
+    @NotEmpty
+    @Size(min = 1, max = 20)
     private Set<@NotBlank @Size(max = 100) String> parkIds;
 }

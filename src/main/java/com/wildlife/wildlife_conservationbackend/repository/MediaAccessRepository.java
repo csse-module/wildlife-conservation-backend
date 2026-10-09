@@ -20,7 +20,7 @@ public class MediaAccessRepository {
         return switch (actor.getRole()) {
             case PARK_MANAGER -> incident(actor, mediaId, false) || community(actor, mediaId, false)
                     || camera(actor, mediaId) || alert(actor, mediaId);
-            case RANGER -> incident(actor, mediaId, true) || alert(actor, mediaId);
+            case RANGER -> incident(actor, mediaId, true) || community(actor, mediaId, false) || alert(actor, mediaId);
             case LIAISON_OFFICER -> community(actor, mediaId, false) || alert(actor, mediaId);
             case RESEARCHER -> camera(actor, mediaId);
             case COMMUNITY_MEMBER -> community(actor, mediaId, true);

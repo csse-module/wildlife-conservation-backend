@@ -4,6 +4,7 @@ public final class EndPoint {
     public static final String BASE = "/api/v1";
     public static final String LOGIN = "/auth/login";
     public static final String REGISTER = "/auth/register";
+    public static final String REGISTRATION_PARKS = "/auth/registration-parks";
     public static final String CHANGE_PASSWORD = "/auth/change-password";
     public static final String PROFILE = "/auth/me";
     public static final String PARKS = "/parks";

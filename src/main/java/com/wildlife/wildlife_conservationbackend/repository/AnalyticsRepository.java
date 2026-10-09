@@ -29,13 +29,18 @@ public class AnalyticsRepository {
         Criteria incidents = period(parkId, "detectedAt", range);
         Map<String, Long> types = counts(incidents, "type", IncidentEntity.class);
         Map<String, Long> areas = counts(incidents, "areaId", IncidentEntity.class);
-        Map<String, Long> days = dailyCounts(incidents, range.getTimezone());
+        Map<String, Long> days = dailyCounts(incidents, range.getTimezone(), "detectedAt", IncidentEntity.class);
+        Criteria communities = period(parkId, "occurredAt", range);
         long community = mongoTemplate.count(Query.query(period(parkId, "occurredAt", range)), CommunityReportEntity.class);
         long resolved = mongoTemplate.count(Query.query(period(parkId, "resolvedAt", range).and("status").is(AlertStatus.RESOLVED)), AlertEntity.class);
         long patrols = mongoTemplate.count(Query.query(period(parkId, "endedAt", range)), PatrolEntity.class);
         Document coverage = coverage(parkId, range);
-        return new AnalyticsFacts(types, days, areas, community, resolved, patrols,
+        AnalyticsFacts facts = new AnalyticsFacts(types, days, areas, community, resolved, patrols,
                 number(coverage, "assignedRouteCount"), number(coverage, "completedRouteCount"));
+        facts.setCommunityTypeCounts(counts(communities, "type", CommunityReportEntity.class));
+        facts.setCommunityAreaCounts(counts(communities, "areaId", CommunityReportEntity.class));
+        facts.setDailyCommunityCounts(dailyCounts(communities, range.getTimezone(), "occurredAt", CommunityReportEntity.class));
+        return facts;
     }
 
     private <T> Map<String, Long> counts(Criteria scope, String field, Class<T> entityClass) {
@@ -44,12 +49,12 @@ public class AnalyticsRepository {
         return countMap(rows);
     }
 
-    private Map<String, Long> dailyCounts(Criteria scope, String timezone) {
+    private <T> Map<String, Long> dailyCounts(Criteria scope, String timezone, String dateField, Class<T> entityClass) {
         Document date = new Document("$dateToString", new Document("format", "%Y-%m-%d")
-                .append("date", "$detectedAt").append("timezone", timezone));
+                .append("date", "$" + dateField).append("timezone", timezone));
         Aggregation aggregation = Aggregation.newAggregation(Aggregation.match(scope),
                 context -> new Document("$group", new Document("_id", date).append("count", new Document("$sum", 1))));
-        return countMap(mongoTemplate.aggregate(aggregation, IncidentEntity.class, Document.class).getMappedResults());
+        return countMap(mongoTemplate.aggregate(aggregation, entityClass, Document.class).getMappedResults());
     }
 
     private Document coverage(String parkId, DateRange range) {

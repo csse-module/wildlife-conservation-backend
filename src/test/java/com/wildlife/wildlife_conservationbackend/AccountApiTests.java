@@ -1,6 +1,7 @@
 package com.wildlife.wildlife_conservationbackend;
 
 import com.wildlife.wildlife_conservationbackend.entity.UserEntity;
+import com.wildlife.wildlife_conservationbackend.entity.ParkEntity;
 import com.wildlife.wildlife_conservationbackend.enums.Role;
 import com.wildlife.wildlife_conservationbackend.repository.MongoPageReader;
 import com.wildlife.wildlife_conservationbackend.repository.ParkRepository;
@@ -88,6 +89,18 @@ class AccountApiTests {
             return changed;
         });
         when(reader.find(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+    }
+
+    @Test
+    void registrationParkCatalogIsPublicAndExposesOnlyNamesAndIds() throws Exception {
+        when(parks.findAllById(any())).thenReturn(List.of(new ParkEntity("park", "Community park", "Asia/Colombo", List.of())));
+        mvc.perform(get("/api/v1/auth/registration-parks"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value("park"))
+                .andExpect(jsonPath("$.data[0].name").value("Community park"))
+                .andExpect(jsonPath("$.data[0].areas").doesNotExist())
+                .andExpect(jsonPath("$.data[0].timezone").doesNotExist());
     }
 
     @Test

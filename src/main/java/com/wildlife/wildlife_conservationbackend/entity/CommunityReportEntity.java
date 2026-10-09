@@ -2,6 +2,7 @@ package com.wildlife.wildlife_conservationbackend.entity;
 
 import com.wildlife.wildlife_conservationbackend.domain.Location;
 import com.wildlife.wildlife_conservationbackend.enums.CommunityReportType;
+import com.wildlife.wildlife_conservationbackend.enums.CommunityReportStatus;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -49,4 +50,14 @@ public class CommunityReportEntity {
     private Instant createdAt;
 
     private String requestHash;
+
+    @Builder.Default
+    private CommunityReportStatus status = CommunityReportStatus.SUBMITTED;
+
+    private String assignedOfficerId;
+    private Instant acceptedAt;
+    private String actionTaken;
+    private String result;
+    private String resolvedBy;
+    private Instant resolvedAt;
 }
