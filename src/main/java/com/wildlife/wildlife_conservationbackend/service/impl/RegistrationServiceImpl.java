@@ -30,7 +30,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public ResponseEntity<StandardResponse<UserProfileResponseDTO>> register(RegistrationRequest request) {
-        requireRegistrationPark(request.getParkId());
+//        requireRegistrationPark(request.getParkId());
         UserEntity user = accountCreator.create(request.getName(), request.getEmail(), request.getPassword(),
                 Role.COMMUNITY_MEMBER, Set.of(request.getParkId()), false);
         log.info("Community account created userId={} parkId={}", user.getId(), request.getParkId());
