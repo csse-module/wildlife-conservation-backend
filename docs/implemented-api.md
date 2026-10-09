@@ -51,7 +51,7 @@ Base URL: `http://localhost:8080/api/v1`. The backend implements 44 operations. 
 | GET | `/camera-trap-images/{id}` | PARK_MANAGER, RESEARCHER |
 | PUT | `/camera-trap-images/{id}/review` | PARK_MANAGER, RESEARCHER |
 
-The five roles are `PARK_MANAGER`, `RANGER`, `LIAISON_OFFICER`, `RESEARCHER`, `COMMUNITY_MEMBER`. Every resource is restricted to the account's assigned parks. Ranger assignment/patrol queries return only that ranger's records. Managers see records within their assigned parks. `/users` returns active users sharing the selected/assigned parks; its default role filter is `RANGER`.
+The five roles are `PARK_MANAGER`, `RANGER`, `LIAISON_OFFICER`, `RESEARCHER`, `COMMUNITY_MEMBER`. Staff resources are restricted to assigned parks. Community members can list configured parks and submit reports/photos for a selected park without any account park assignment; they can read only their own reports and media. Ranger assignment/patrol queries return only that ranger's records. Managers see records within their assigned parks. `/users` returns active users sharing the selected/assigned parks; its default role filter is `RANGER`.
 
 Manager flow: login → load profile/parks → load routes and eligible rangers → create assignment with a new UUID → view assignments/patrol summaries → open patrol details.
 
@@ -212,7 +212,7 @@ All list APIs return `data` shaped as `{"items":[],"page":0,"size":20,"totalItem
 | `/patrol-assignments` | Optional `parkId`, `status=ASSIGNED\|COMPLETED` | Assignment object shown below |
 | `/patrols` | Optional `parkId`, `routeId`, paired `from`/`to` | Patrol summary shown below |
 
-Omitting `parkId` searches assigned parks. An explicitly unauthorized park returns 403. `/patrol-routes/{id}` returns the route object, or 404 when it does not exist.
+For staff, omitting `parkId` searches assigned parks and an explicitly unauthorized park returns 403. Community reporting can use any configured park without an account park assignment; report ownership is still enforced. `/patrol-routes/{id}` returns the route object, or 404 when it does not exist.
 
 ## Assign a patrol
 
