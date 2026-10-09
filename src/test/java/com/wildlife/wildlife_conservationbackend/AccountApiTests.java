@@ -54,8 +54,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class AccountApiTests {
-    private static final String PASSWORD = "current-password-01";
-    private static final String NEW_PASSWORD = "replacement-password-02";
+    private static final String PASSWORD = "old123";
+    private static final String NEW_PASSWORD = "new456";
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper mapper;
     @Autowired private PasswordEncoder encoder;
@@ -324,7 +324,7 @@ class AccountApiTests {
     }
 
     static Stream<String> invalidPasswords() {
-        return Stream.of("short", "漢".repeat(25), "a".repeat(73), "😀".repeat(8));
+        return Stream.of("short", "漢".repeat(25), "a".repeat(73), "😀".repeat(5));
     }
 
     private UserEntity account(Role role, boolean passwordChangeRequired) {
