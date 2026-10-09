@@ -75,6 +75,32 @@ public class PatrolServiceImpl implements PatrolService {
     private final ResponseGenerator responseGenerator;
 
     @Override
+    public ResponseEntity<StandardResponse<PatrolRouteResponseDTO>> createRoute(CurrentUser actor, com.wildlife.wildlife_conservationbackend.dto.request.PatrolRouteRequestDTO request) {
+        String parkId = request.getParkId();
+        if (parkId == null || parkId.trim().isEmpty()) {
+            if (!actor.getParkIds().isEmpty()) {
+                parkId = actor.getParkIds().iterator().next();
+            } else {
+                throw ApiException.invalid("User has no associated parks to assign the route.");
+            }
+        } else {
+            parkService.requirePark(actor, parkId);
+        }
+
+        PatrolRouteEntity route = new PatrolRouteEntity(
+                java.util.UUID.randomUUID().toString(),
+                parkId,
+                request.getAreaId(),
+                request.getName(),
+                request.getPlannedDistanceMeters(),
+                request.getPathPoints()
+        );
+        PatrolRouteEntity saved = routeRepository.save(route);
+        log.info("Created new patrol route id={} by actorId={}", saved.getId(), actor.getId());
+        return responseGenerator.generateSuccessResponse(routeMapper.toResponse(saved), HttpStatus.CREATED);
+    }
+
+    @Override
     public ResponseEntity<StandardResponse<PageResponse<PatrolRouteResponseDTO>>> listRoutes(
             CurrentUser actor, String parkId, PageQuery page) {
         Criteria scope = Criteria.where("parkId").in(parkService.accessibleParkIds(actor, parkId));
@@ -194,8 +220,15 @@ public class PatrolServiceImpl implements PatrolService {
 
     private UserEntity findEligibleRanger(String rangerId, String parkId) {
         UserEntity ranger = userRepository.findById(rangerId).orElseThrow(() -> ApiException.notFound("Ranger"));
-        if (!ranger.isActive() || ranger.getRole() != Role.RANGER || !ranger.getParkIds().contains(parkId)) {
+        if (!ranger.isActive() || ranger.getRole() != Role.RANGER) {
+            throw ApiException.invalid("The selected user must be an active ranger.");
+        }
+        if (!ranger.getParkIds().isEmpty() && !ranger.getParkIds().contains(parkId)) {
             throw ApiException.invalid("The selected user must be an active ranger assigned to this park.");
+        }
+        if (ranger.getParkIds().isEmpty()) {
+            ranger.getParkIds().add(parkId);
+            userRepository.save(ranger);
         }
         return ranger;
     }
