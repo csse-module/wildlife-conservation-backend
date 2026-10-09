@@ -28,6 +28,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class PatrolRouteController {
     private final PatrolService patrolService;
 
+    @org.springframework.web.bind.annotation.PostMapping(EndPoint.ROUTES)
+    @PreAuthorize("hasRole('PARK_MANAGER')")
+    public ResponseEntity<StandardResponse<PatrolRouteResponseDTO>> create(
+            @AuthenticationPrincipal CurrentUser actor, 
+            @Valid @org.springframework.web.bind.annotation.RequestBody com.wildlife.wildlife_conservationbackend.dto.request.PatrolRouteRequestDTO request) {
+        return patrolService.createRoute(actor, request);
+    }
+
     @GetMapping(EndPoint.ROUTES)
     public ResponseEntity<StandardResponse<PageResponse<PatrolRouteResponseDTO>>> list(
             @AuthenticationPrincipal CurrentUser actor, @RequestParam(required = false) @Size(max = 100) String parkId,

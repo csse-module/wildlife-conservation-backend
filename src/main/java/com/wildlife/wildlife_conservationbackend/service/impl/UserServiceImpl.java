@@ -61,8 +61,16 @@ public class UserServiceImpl implements UserService {
     public ResponseEntity<StandardResponse<PageResponse<UserSummaryResponseDTO>>> listUsers(
             CurrentUser actor, String parkId, Role role, PageQuery page) {
         Role selectedRole = role == null ? Role.RANGER : role;
-        Criteria scope = Criteria.where("parkIds").in(parkService.accessibleParkIds(actor, parkId))
-                .and("active").is(true).and("role").is(selectedRole);
+        
+        Criteria scope = new Criteria().andOperator(
+            Criteria.where("active").is(true),
+            Criteria.where("role").is(selectedRole),
+            new Criteria().orOperator(
+                Criteria.where("parkIds").in(parkService.accessibleParkIds(actor, parkId)),
+                Criteria.where("parkIds").size(0),
+                Criteria.where("parkIds").exists(false)
+            )
+        );
         PageRequest pageable = page.pageable(Sort.by("name", "id"));
         Page<UserEntity> users = pageReader.find(scope, pageable, UserEntity.class);
         PageResponse<UserSummaryResponseDTO> response = PageResponse.from(users.map(userMapper::toSummary));

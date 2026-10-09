@@ -30,4 +30,11 @@ public class ParkController {
             @AuthenticationPrincipal CurrentUser actor, @Valid @ModelAttribute PageQuery page) {
         return parkService.listParks(actor, page);
     }
+
+    @org.springframework.web.bind.annotation.PostMapping(value = EndPoint.PARKS, consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasRole('PARK_MANAGER')")
+    public ResponseEntity<StandardResponse<ParkResponseDTO>> create(
+            @AuthenticationPrincipal CurrentUser actor, @Valid @org.springframework.web.bind.annotation.RequestBody com.wildlife.wildlife_conservationbackend.dto.request.ParkCreateRequestDTO request) {
+        return parkService.createPark(actor, request);
+    }
 }

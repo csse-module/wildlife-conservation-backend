@@ -31,6 +31,7 @@ public class ParkServiceImpl implements ParkService {
     private final ParkMapper parkMapper;
     private final ResponseGenerator responseGenerator;
     private final ParkRepository parkRepository;
+    private final com.wildlife.wildlife_conservationbackend.repository.UserRepository userRepository;
 
     @Override
     public ResponseEntity<StandardResponse<PageResponse<ParkResponseDTO>>> listParks(CurrentUser actor, PageQuery page) {
@@ -41,6 +42,26 @@ public class ParkServiceImpl implements ParkService {
 
         log.debug("Listed park records actorId={} count={}", actor.getId(), parks.getNumberOfElements());
         return responseGenerator.generateSuccessResponse(response, HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<StandardResponse<ParkResponseDTO>> createPark(CurrentUser actor, com.wildlife.wildlife_conservationbackend.dto.request.ParkCreateRequestDTO request) {
+        if (parkRepository.existsById(request.getId())) {
+            throw ApiException.invalid("A park with this ID already exists.");
+        }
+        ParkEntity entity = parkMapper.toEntity(request);
+        parkRepository.insert(entity);
+        
+        userRepository.findById(actor.getId()).ifPresent(user -> {
+            java.util.Set<String> newParkIds = new java.util.HashSet<>(user.getParkIds());
+            newParkIds.add(entity.getId());
+            user.setParkIds(newParkIds);
+            userRepository.save(user);
+        });
+
+        log.info("Park created id={} by actorId={}", entity.getId(), actor.getId());
+        
+        return responseGenerator.generateSuccessResponse(parkMapper.toResponse(entity), HttpStatus.CREATED);
     }
 
     @Override

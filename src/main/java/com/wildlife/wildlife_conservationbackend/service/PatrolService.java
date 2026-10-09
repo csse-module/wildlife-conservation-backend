@@ -14,7 +14,10 @@ import com.wildlife.wildlife_conservationbackend.dto.response.PatrolSummaryRespo
 import com.wildlife.wildlife_conservationbackend.dto.response.StandardResponse;
 import org.springframework.http.ResponseEntity;
 
+import com.wildlife.wildlife_conservationbackend.dto.request.PatrolRouteRequestDTO;
+
 public interface PatrolService {
+    ResponseEntity<StandardResponse<PatrolRouteResponseDTO>> createRoute(CurrentUser actor, PatrolRouteRequestDTO request);
     ResponseEntity<StandardResponse<PageResponse<PatrolRouteResponseDTO>>> listRoutes(
             CurrentUser actor, String parkId, PageQuery page);
     ResponseEntity<StandardResponse<PatrolRouteResponseDTO>> getRoute(CurrentUser actor, String id);
