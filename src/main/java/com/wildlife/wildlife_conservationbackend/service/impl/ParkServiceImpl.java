@@ -6,6 +6,7 @@ import com.wildlife.wildlife_conservationbackend.dto.response.PageResponse;
 import com.wildlife.wildlife_conservationbackend.dto.response.ParkResponseDTO;
 import com.wildlife.wildlife_conservationbackend.dto.response.StandardResponse;
 import com.wildlife.wildlife_conservationbackend.entity.ParkEntity;
+import com.wildlife.wildlife_conservationbackend.enums.Role;
 import com.wildlife.wildlife_conservationbackend.exception.ApiException;
 import com.wildlife.wildlife_conservationbackend.mapper.ParkMapper;
 import com.wildlife.wildlife_conservationbackend.repository.MongoPageReader;
@@ -13,6 +14,7 @@ import com.wildlife.wildlife_conservationbackend.repository.ParkRepository;
 import com.wildlife.wildlife_conservationbackend.service.ParkService;
 import com.wildlife.wildlife_conservationbackend.utility.ResponseGenerator;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,7 +37,8 @@ public class ParkServiceImpl implements ParkService {
 
     @Override
     public ResponseEntity<StandardResponse<PageResponse<ParkResponseDTO>>> listParks(CurrentUser actor, PageQuery page) {
-        Criteria scope = Criteria.where("_id").in(actor.getParkIds());
+        Criteria scope = actor.getRole() == Role.COMMUNITY_MEMBER
+                ? new Criteria() : Criteria.where("_id").in(actor.getParkIds());
         PageRequest pageable = page.pageable(Sort.by("name", "id"));
         Page<ParkEntity> parks = pageReader.find(scope, pageable, ParkEntity.class);
         PageResponse<ParkResponseDTO> response = PageResponse.from(parks.map(parkMapper::toResponse));
@@ -67,6 +70,9 @@ public class ParkServiceImpl implements ParkService {
     @Override
     public Set<String> accessibleParkIds(CurrentUser actor, String requestedPark) {
         if (requestedPark == null) {
+            if (actor.getRole() == Role.COMMUNITY_MEMBER) {
+                return parkRepository.findAll().stream().map(ParkEntity::getId).collect(Collectors.toSet());
+            }
             return actor.getParkIds();
         }
         requirePark(actor, requestedPark);
@@ -75,6 +81,12 @@ public class ParkServiceImpl implements ParkService {
 
     @Override
     public void requirePark(CurrentUser actor, String parkId) {
+        if (actor.getRole() == Role.COMMUNITY_MEMBER) {
+            if (!parkRepository.existsById(parkId)) {
+                throw ApiException.notFound("Park");
+            }
+            return;
+        }
         if (!actor.getParkIds().contains(parkId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "PARK_ACCESS_DENIED", "You do not have access to this park.");
         }
