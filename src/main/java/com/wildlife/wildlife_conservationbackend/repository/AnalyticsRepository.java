@@ -86,7 +86,11 @@ public class AnalyticsRepository {
 
     private Map<String, Long> countMap(List<Document> rows) {
         Map<String, Long> result = new LinkedHashMap<>();
-        rows.forEach(row -> result.put(row.getString("_id"), number(row, "count")));
+        rows.forEach(row -> {
+            Object idObj = row.get("_id");
+            String key = idObj == null ? "unknown" : String.valueOf(idObj);
+            result.put(key, number(row, "count"));
+        });
         return result;
     }
 

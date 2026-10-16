@@ -126,10 +126,28 @@ public class ReportPdfRenderer {
             stream.setFont(font, FONT_SIZE);
             stream.newLineAtOffset(48, 744);
             for (String line : lines) {
-                stream.showText(line);
+                stream.showText(sanitizeForFont(line, font));
                 stream.newLineAtOffset(0, -14);
             }
             stream.endText();
         }
+    }
+
+    private String sanitizeForFont(String text, PDFont font) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (char c : text.toCharArray()) {
+            try {
+                font.encode(String.valueOf(c));
+                sb.append(c);
+            } catch (Exception e) {
+                if (c == '—' || c == '–') sb.append('-');
+                else if (c == '“' || c == '”') sb.append('"');
+                else if (c == '‘' || c == '’') sb.append('\'');
+                else if (c == '•' || c == '·') sb.append('*');
+                else sb.append('?');
+            }
+        }
+        return sb.toString();
     }
 }

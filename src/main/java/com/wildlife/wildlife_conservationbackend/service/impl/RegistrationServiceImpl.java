@@ -41,7 +41,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private void requireRegistrationPark(String parkId) {
-        if (!properties.getCommunityParkIds().contains(parkId)) {
+        boolean configured = properties.getCommunityParkIds() != null && properties.getCommunityParkIds().contains(parkId);
+        if (!configured && !parkRepository.existsById(parkId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "REGISTRATION_NOT_ALLOWED",
                     "Community registration is not enabled for this park.");
         }
@@ -52,7 +53,16 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public ResponseEntity<StandardResponse<List<RegistrationParkResponseDTO>>> availableParks() {
-        List<RegistrationParkResponseDTO> parks = parkRepository.findAllById(properties.getCommunityParkIds()).stream()
+        var all = parkRepository.findAll();
+        List<com.wildlife.wildlife_conservationbackend.entity.ParkEntity> entities;
+        if (!all.isEmpty()) {
+            entities = all;
+        } else if (properties.getCommunityParkIds() != null && !properties.getCommunityParkIds().isEmpty()) {
+            entities = parkRepository.findAllById(properties.getCommunityParkIds());
+        } else {
+            entities = List.of();
+        }
+        List<RegistrationParkResponseDTO> parks = entities.stream()
                 .map(park -> new RegistrationParkResponseDTO(park.getId(), park.getName()))
                 .sorted(Comparator.comparing(RegistrationParkResponseDTO::getName)).toList();
         return responseGenerator.generateSuccessResponse(parks, HttpStatus.OK);

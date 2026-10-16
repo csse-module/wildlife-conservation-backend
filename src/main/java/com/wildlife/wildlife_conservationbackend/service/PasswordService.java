@@ -8,4 +8,5 @@ import org.springframework.http.ResponseEntity;
 
 public interface PasswordService {
     ResponseEntity<StandardResponse<PasswordChangeResponseDTO>> changePassword(CurrentUser actor, PasswordChangeRequest request);
+    ResponseEntity<StandardResponse<java.util.Map<String, String>>> resetPassword(com.wildlife.wildlife_conservationbackend.dto.request.PasswordResetRequestDTO request);
 }

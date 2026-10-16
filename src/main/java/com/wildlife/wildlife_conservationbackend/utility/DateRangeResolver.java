@@ -24,8 +24,14 @@ public class DateRangeResolver {
             throw ApiException.invalid("The date range must be ordered and contain at most 92 days.");
         }
         var park = parkRepository.findById(parkId).orElseThrow(() -> ApiException.notFound("Park"));
-        ZoneId zone = ZoneId.of(park.getTimezone());
-        return new DateRange(from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant(), park.getTimezone());
+        ZoneId zone;
+        try {
+            zone = (park.getTimezone() != null && !park.getTimezone().isBlank()) ? ZoneId.of(park.getTimezone()) : ZoneId.of("Asia/Colombo");
+        } catch (Exception e) {
+            zone = ZoneId.of("Asia/Colombo");
+        }
+        String tz = zone.getId();
+        return new DateRange(from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant(), tz);
     }
 
     public void applyOptional(Criteria scope, String parkId, LocalDate from, LocalDate to, String field) {

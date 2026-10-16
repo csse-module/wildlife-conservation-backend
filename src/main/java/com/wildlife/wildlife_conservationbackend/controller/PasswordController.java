@@ -21,14 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping(value = EndPoint.BASE, produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
 public class PasswordController {
     private final PasswordService passwordService;
     private final PasswordMapper mapper;
 
     @PostMapping(value = EndPoint.CHANGE_PASSWORD, consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<StandardResponse<PasswordChangeResponseDTO>> change(
             @AuthenticationPrincipal CurrentUser actor, @Valid @RequestBody PasswordChangeRequestDTO request) {
         return passwordService.changePassword(actor, mapper.toRequest(request));
+    }
+
+    @PostMapping(value = EndPoint.RESET_PASSWORD, consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<StandardResponse<java.util.Map<String, String>>> resetPassword(
+            @Valid @RequestBody com.wildlife.wildlife_conservationbackend.dto.request.PasswordResetRequestDTO request) {
+        return passwordService.resetPassword(request);
     }
 }
