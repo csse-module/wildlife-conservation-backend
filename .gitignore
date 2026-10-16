@@ -30,8 +30,8 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-.vscode/
 
-.env
 uploads/
 logs/
+config.bat
+node_modules

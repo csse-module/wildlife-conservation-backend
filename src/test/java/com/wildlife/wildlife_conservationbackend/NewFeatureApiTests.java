@@ -197,9 +197,44 @@ class NewFeatureApiTests {
     }
 
     private String authenticate(Role role) {
-        var user = new UserEntity(role.name(), role.name(), role.name() + "@example.com", "hash", role, Set.of("park"), true);
+        return authenticate(role, Set.of("park"));
+    }
+
+    private String authenticate(Role role, Set<String> parkIds) {
+        var user = new UserEntity(role.name(), role.name(), role.name() + "@example.com", "hash", role, parkIds, true);
         when(users.findById(role.name())).thenReturn(Optional.of(user));
         return "Bearer " + tokens.issue(user);
+    }
+
+    @Test
+    void villagerWithoutParkAssignmentCanChooseParkSubmitReportAndUploadPhoto() throws Exception {
+        String authorization = authenticate(Role.COMMUNITY_MEMBER, Set.of());
+        when(reader.find(any(Criteria.class), any(PageRequest.class), eq(ParkEntity.class)))
+                .thenReturn(new PageImpl<>(List.of(new ParkEntity("park", "Park", "Asia/Colombo", List.of(new ParkArea("area", "Area"))))));
+        mvc.perform(get("/api/v1/parks").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value("park"));
+        mvc.perform(put("/api/v1/community-reports/" + ID).header("Authorization", authorization)
+                .contentType(MediaType.APPLICATION_JSON).content(COMMUNITY))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.parkId").value("park"))
+                .andExpect(jsonPath("$.data.reportedBy").value(Role.COMMUNITY_MEMBER.name()));
+        mvc.perform(multipart("/api/v1/media/" + PHOTO).file(new MockMultipartFile("file", "photo.png", "image/png", png))
+                .with(request -> { request.setMethod("PUT"); return request; })
+                .param("parkId", "park").param("category", "COMMUNITY_REPORT").header("Authorization", authorization))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void villagerWithoutParkAssignmentCanReadOwnReportButCannotReadAnotherVillagersReport() throws Exception {
+        String authorization = authenticate(Role.COMMUNITY_MEMBER, Set.of());
+        var report = CommunityReportEntity.builder().id(ID).parkId("park").areaId("area")
+                .type(com.wildlife.wildlife_conservationbackend.enums.CommunityReportType.CROP_DAMAGE)
+                .description("Paddy damage").reportedBy(Role.COMMUNITY_MEMBER.name()).build();
+        when(community.findById(ID)).thenReturn(Optional.of(report));
+        mvc.perform(get("/api/v1/community-reports/" + ID).header("Authorization", authorization))
+                .andExpect(status().isOk());
+        report.setReportedBy("another-villager");
+        mvc.perform(get("/api/v1/community-reports/" + ID).header("Authorization", authorization))
+                .andExpect(status().isNotFound());
     }
 
     @Test

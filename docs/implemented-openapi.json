@@ -250,7 +250,7 @@
           "RESEARCHER",
           "COMMUNITY_MEMBER"
         ],
-        "description": "Return only parks assigned to this account, including their known areas and timezone. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
+        "description": "Staff receive assigned parks. Community members receive all configured parks for report routing, including known areas and timezone, without requiring an account park assignment. Community reports and media remain ownership restricted. Temporary-password accounts receive 403 PASSWORD_CHANGE_REQUIRED.",
         "responses": {
           "200": {
             "description": "Successful response",
