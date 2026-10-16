@@ -1,6 +1,6 @@
 # Case-study demonstration
 
-Admin is the `PARK_MANAGER` role. Public registration creates only `COMMUNITY_MEMBER`. Staff accounts are created by a park manager; rangers, liaison officers and researchers use the normal login screen. Every role is restricted to assigned parks.
+Admin is the `PARK_MANAGER` role. Public registration creates only `COMMUNITY_MEMBER`. Staff accounts are created by a park manager; rangers, liaison officers and researchers use the normal login screen. Staff are restricted to assigned parks. Villagers need no account park assignment to report: they choose a configured park/area to route the incident, and can read only their own reports.
 
 ## Start the backend
 
