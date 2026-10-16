@@ -40,7 +40,7 @@ public class AlertController {
     private final AlertMapper mapper;
 
     @PutMapping(value = EndPoint.ALERTS + "/{id}", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('PARK_MANAGER')")
+    @PreAuthorize("hasAnyRole('PARK_MANAGER', 'RANGER')")
     public ResponseEntity<StandardResponse<AlertResponseDTO>> create(
             @AuthenticationPrincipal CurrentUser actor,
             @PathVariable @Pattern(regexp = ValidationPatterns.UUID) String id,

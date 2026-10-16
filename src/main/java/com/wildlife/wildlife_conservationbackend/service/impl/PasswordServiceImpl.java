@@ -50,4 +50,23 @@ public class PasswordServiceImpl implements PasswordService {
             throw ApiException.invalid("The new password must differ from the current password.");
         }
     }
+
+    @Override
+    public ResponseEntity<StandardResponse<java.util.Map<String, String>>> resetPassword(
+            com.wildlife.wildlife_conservationbackend.dto.request.PasswordResetRequestDTO request) {
+        String normalized = request.getEmail().trim().toLowerCase();
+        UserEntity user = userRepository.findByNormalizedEmail(normalized)
+                .filter(UserEntity::isActive)
+                .orElseThrow(() -> ApiException.notFound("User not found with email: " + request.getEmail()));
+        
+        UserEntity changed = userPasswordRepository.changePassword(user, passwordEncoder.encode(request.getNewPassword()));
+        if (changed == null) {
+            throw ApiException.conflict("PASSWORD_RESET_CONFLICT", "Could not reset password. Please try again.");
+        }
+        log.info("Password reset successfully for email={}", normalized);
+        return responseGenerator.generateSuccessResponse(
+                java.util.Map.of("message", "Password has been reset successfully. Please login with your new password."),
+                HttpStatus.OK
+        );
+    }
 }

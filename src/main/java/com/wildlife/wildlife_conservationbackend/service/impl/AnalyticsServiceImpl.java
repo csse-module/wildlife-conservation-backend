@@ -58,14 +58,29 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         var park = parkRepository.findById(parkId).orElseThrow(() -> ApiException.notFound("Park"));
         AnalyticsFacts facts = repository.summarize(parkId, range);
         List<IncidentTypeCount> types = facts.getIncidentTypeCounts().entrySet().stream()
-                .map(entry -> new IncidentTypeCount(IncidentType.valueOf(entry.getKey()), entry.getValue()))
+                .map(entry -> {
+                    IncidentType incType;
+                    try {
+                        incType = entry.getKey() == null ? IncidentType.OTHER : IncidentType.valueOf(entry.getKey());
+                    } catch (Exception ex) {
+                        incType = IncidentType.OTHER;
+                    }
+                    return new IncidentTypeCount(incType, entry.getValue());
+                })
                 .sorted(Comparator.comparing(count -> count.getType().name())).toList();
         List<DailyCount> days = from.datesUntil(to.plusDays(1))
                 .map(date -> new DailyCount(date, facts.getDailyIncidentCounts().getOrDefault(date.toString(), 0L))).toList();
-        Map<String, String> names = park.getAreas().stream().collect(Collectors.toMap(area -> area.getId(), area -> area.getName()));
+        Map<String, String> names = (park.getAreas() == null) ? Map.of() : park.getAreas().stream()
+                .filter(area -> area != null && area.getId() != null)
+                .collect(Collectors.toMap(area -> area.getId(), area -> area.getName() != null ? area.getName() : "Unknown area", (a, b) -> a));
         List<AreaCount> areas = facts.getAreaCounts().entrySet().stream()
-                .map(entry -> new AreaCount(entry.getKey(), names.getOrDefault(entry.getKey(), "Unknown area"), entry.getValue(), entry.getValue() >= 3))
-                .sorted(Comparator.comparingLong(AreaCount::getIncidentCount).reversed().thenComparing(AreaCount::getAreaId)).toList();
+                .map(entry -> {
+                    String areaId = entry.getKey() != null ? entry.getKey() : "unknown";
+                    String areaName = names.getOrDefault(areaId, "Unknown area");
+                    return new AreaCount(areaId, areaName, entry.getValue(), entry.getValue() >= 3);
+                })
+                .sorted(Comparator.comparingLong(AreaCount::getIncidentCount).reversed()
+                        .thenComparing(a -> a.getAreaId() != null ? a.getAreaId() : "")).toList();
         long totalIncidents = types.stream().mapToLong(IncidentTypeCount::getCount).sum();
         RouteCoverage coverage = coverage(facts);
         boolean available = totalIncidents > 0 || facts.getCommunityReportCount() > 0 || facts.getResolvedAlertCount() > 0
@@ -76,8 +91,13 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         List<DailyCount> communityDays = from.datesUntil(to.plusDays(1))
                 .map(date -> new DailyCount(date, facts.getDailyCommunityCounts().getOrDefault(date.toString(), 0L))).toList();
         List<CommunityAreaCount> communityAreas = facts.getCommunityAreaCounts().entrySet().stream()
-                .map(entry -> new CommunityAreaCount(entry.getKey(), names.getOrDefault(entry.getKey(), "Unknown area"), entry.getValue()))
-                .sorted(Comparator.comparingLong(CommunityAreaCount::getReportCount).reversed().thenComparing(CommunityAreaCount::getAreaId)).toList();
+                .map(entry -> {
+                    String areaId = entry.getKey() != null ? entry.getKey() : "unknown";
+                    String areaName = names.getOrDefault(areaId, "Unknown area");
+                    return new CommunityAreaCount(areaId, areaName, entry.getValue());
+                })
+                .sorted(Comparator.comparingLong(CommunityAreaCount::getReportCount).reversed()
+                        .thenComparing(a -> a.getAreaId() != null ? a.getAreaId() : "")).toList();
         snapshot.setCommunityConflict(new CommunityConflictSummary(facts.getCommunityTypeCounts(), communityDays, communityAreas));
         return snapshot;
     }

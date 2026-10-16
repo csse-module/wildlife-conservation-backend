@@ -343,7 +343,7 @@ class NewFeatureApiTests {
             Arguments.of("PUT", "/incidents/{id}", INCIDENT, "RANGER"),
             Arguments.of("GET", "/incidents", "", "PARK_MANAGER,RANGER"),
             Arguments.of("GET", "/incidents/{id}", "", "PARK_MANAGER,RANGER"),
-            Arguments.of("PUT", "/alerts/{id}", ALERT, "PARK_MANAGER"),
+            Arguments.of("PUT", "/alerts/{id}", ALERT, "PARK_MANAGER,RANGER"),
             Arguments.of("GET", "/alerts", "", "PARK_MANAGER,RANGER,LIAISON_OFFICER"),
             Arguments.of("GET", "/alerts/{id}", "", "PARK_MANAGER,RANGER,LIAISON_OFFICER"),
             Arguments.of("POST", "/alerts/{id}/accept", "", "RANGER,LIAISON_OFFICER"),
