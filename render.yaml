@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: wildlife-conservation-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/auth/registration-parks
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APP_LOG_LEVEL
+        value: INFO
