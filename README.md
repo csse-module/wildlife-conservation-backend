@@ -75,6 +75,10 @@ The optional demo seed creates one park (`park-yala`), area `area-b1`, one route
 
 Seed runs preserve existing data and passwords. The route coordinates are demonstration data. For Flutter web, set `CORS_ALLOWED_ORIGINS` to the exact comma-separated browser origins. Native Flutter does not require CORS configuration. Set `PORT` to change the default port 8080.
 
+## Deploy on Render
+
+The backend includes a Java 17 multi-stage `Dockerfile` and a `render.yaml` Blueprint for a free Render web service. See [the Render deployment guide](docs/render-deployment.md) for setup, environment variables, MongoDB Atlas network access, persistent uploads, and Flutter configuration.
+
 ## Account onboarding — new in 1.2.0
 
 - `POST /api/v1/auth/register`: public community registration; the backend always assigns `COMMUNITY_MEMBER`.
